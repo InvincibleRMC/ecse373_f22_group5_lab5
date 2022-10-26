@@ -14,97 +14,47 @@
 
 std::vector<osrf_gear::Order> order_vector;
  ros::ServiceClient materialLocations;
-std::vector<std::vector<geometry_msgs::Pose>> camera_data = std::vector<std::vector<geometry_msgs::Pose>>(10);
+std::vector<std::vector<osrf_gear::Model>> camera_data = std::vector<std::vector<osrf_gear::Model>>(10);
 //int_vector.clear();
+ros::ServiceClient gml ;
 
 
 void orderCallback(const osrf_gear::Order msg){
-    ROS_INFO("Ordercallback!!!!!");
     order_vector.push_back(msg);
-    //ROS_INFO("Order ID: %s",msg.order_id);
-   // msg.shipments[0];
-   ROS_INFO("HI1");
-    std::vector<std::string> types;
+}
+
+void printOrderModelPose(){
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
-    ROS_INFO("HI2");
-    for(osrf_gear::Shipment shipment : shipments){
-        ROS_INFO("HI3");
-        for(osrf_gear::Product product : shipment.products){
-            ROS_INFO("HI4");
-            std::string productType = product.type;
-            
-            osrf_gear::GetMaterialLocations gml;
-            gml.request.material_type = productType;
-            materialLocations.call(gml);
-            ROS_INFO("HI5");
-            for(osrf_gear::StorageUnit su : gml.response.storage_units) {
-                ROS_WARN("%s\n",su.unit_id);
-                ROS_INFO("HI6");
+  
+        for(osrf_gear::Shipment shipment : shipments){
+       
+            for(osrf_gear::Product product : shipment.products){
+          
+                std::string productType = product.type;
+        
+                osrf_gear::GetMaterialLocations gmlService;
+                gmlService.request.material_type = productType;
+                gml.call(gmlService);
+             
+                for(osrf_gear::StorageUnit su : gmlService.response.storage_units) {
+                  
+                    const char *binName = su.unit_id.c_str();
+                    int binNum;
+                    sscanf(binName,"bin%d",&binNum);
+                    binNum--;
+                   
+                    for(osrf_gear::Model model : camera_data[binNum]){
+                        if(strstr(productType.c_str(),model.type.c_str())){
+                            geometry_msgs::Point point = model.pose.position;
+                            ROS_WARN("name:= %s x:=%f y:=%f z:=%f",model.type.c_str(),point.x,point.y,point.z);
+                        }
+                       
+                    }
+                }
             }
         }
-    }
-
-    order_vector.erase(order_vector.begin());
+        //order_vector.erase(order_vector.begin());
 }
-
-void cam1Callback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    // ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[0].push_back(img.pose);
-}
-
-void cam2Callback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    // ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[1].push_back(img.pose);
-}
-void cam3Callback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    // ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[2].push_back(img.pose);
-}
-
-void cam4Callback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    // ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[3].push_back(img.pose);
-}
-void cam5Callback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    // ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[4].push_back(img.pose);
-}
-
-void cam6Callback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    // ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[5].push_back(img.pose);
-}
-void cam1AgvCallback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    //ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[6].push_back(img.pose);
-}
-
-void cam2AgvCallback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    //ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[7].push_back(img.pose);
-}
-void cam1QCCallback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    //ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[8].push_back(img.pose);
-}
-
-void cam2QCCallback(const osrf_gear::LogicalCameraImage img){
-    geometry_msgs::Point point = img.pose.position;
-    //ROS_INFO("%f %f %f",point.x,point.y,point.z);
-    camera_data[9].push_back(img.pose);
-}
-// (void *)(osrf_gear::LogicalCameraImage)
-void (* callbacks[])(const osrf_gear::LogicalCameraImage) = {cam1Callback, cam2Callback, cam3Callback, cam4Callback, cam5Callback,
-                                cam6Callback, cam1AgvCallback, cam2AgvCallback, cam1QCCallback, cam2QCCallback};
 
 
 int main(int argc, char* argv[]){
@@ -113,6 +63,8 @@ int main(int argc, char* argv[]){
     ros::init(argc, argv, "lab5"); 
     ros::NodeHandle n;
     //ros::NameSpac
+
+    gml= n.serviceClient<osrf_gear::GetMaterialLocations>("/ariac/material_locations");
 
     ros::ServiceClient start_client =
     n.serviceClient<std_srvs::Trigger>("/ariac/start_competition");
@@ -132,66 +84,49 @@ int main(int argc, char* argv[]){
         ROS_INFO("Competition started!");
     }
 
-    /*std_srvs::Trigger begin_comp;
-    ros::ServiceClient begin_client = n.serviceClient<std_srvs::Trigger>("/ariac/start_competition");
-    ros::Publisher pubState = n.advertise<std_msgs::String>("/ariac/competition_state",1000);
-    
-    std_msgs::String stringMsg;
-    stringMsg.data = "go";
-
-    //std_srvs::SetBool my_bool_var;
-    //my_bool_var.request.data = true;
-
-    bool service_call_succeeded;
-
-    ROS_INFO("hi");
-
-    while(true){
-
-        pubState.publish(stringMsg);
-
-        service_call_succeeded = begin_client.call(begin_comp);
-        if(!service_call_succeeded){
-            ROS_ERROR("Competition service call failed! Goodness Gracious!!");
-        }
-        if(strstr(begin_comp.response.message.c_str(), "cannot start if not in 'init' state")){
-            ROS_WARN("Competition service returned failure: %s", begin_comp.response.message.c_str());
-        }
-        else{
-            ROS_INFO("Competition service called successfully: %s", begin_comp.response.message.c_str());
-            break;
-        }
-    }*/
-
-     ROS_INFO("hi");
-     fflush(stdout);
     ros::Subscriber sub = n.subscribe<osrf_gear::Order>("/ariac/orders", 1000,orderCallback);
     std::vector<ros::Subscriber> binCameras = std::vector<ros::Subscriber>(6);
     std::vector<ros::Subscriber> agvCameras= std::vector<ros::Subscriber>(2);
     std::vector<ros::Subscriber> qualityCameras= std::vector<ros::Subscriber>(2);
     
-    ROS_INFO("afterCams");
-    fflush(stdout);
     for(int i=0;i<binCameras.size();i++){
         char stringCam[100];
-        std::sprintf(stringCam,"/ariac/logROS_INFOical_camera_bin%d",i+1);
-        fflush(stdout);
-        binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, callbacks[i]);
+        std::sprintf(stringCam,"/ariac/logical_camera_bin%d",i+1);
+        binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
+        {
+            for(osrf_gear::Model m : img->models){
+                camera_data[i].push_back(m);          
+            }
+            printOrderModelPose();
+            for(osrf_gear::Model m : img->models){
+                camera_data[i].pop_back();
+            }
+        });
     }
 
     
-    for(int i=0;i<agvCameras.size();i++){
+    for(int i=binCameras.size();i<agvCameras.size()+binCameras.size();i++){
         char stringCam[100];
         std::sprintf(stringCam,"/ariac/logical_camera_agv%d",i+1);
       
-        agvCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, callbacks[i + binCameras.size()]);
+        agvCameras[i-binCameras.size()] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
+        {
+            for(osrf_gear::Model m : img->models){
+                camera_data[i].push_back(m);          
+            }
+        });
     }
 
-    for(int i=0;i<qualityCameras.size();i++){
+    for(int i=agvCameras.size()+binCameras.size();i<agvCameras.size()+binCameras.size()+qualityCameras.size();i++){
         char stringCam[100];
         std::sprintf(stringCam,"/ariac/quality_control_sensor_%d",i+1);
       
-        qualityCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, callbacks[i + binCameras.size() + agvCameras.size()]);
+        qualityCameras[i-(agvCameras.size()+binCameras.size())] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
+        {
+            for(osrf_gear::Model m : img->models){
+                camera_data[i].push_back(m);          
+            }
+        });
     }
 
 
