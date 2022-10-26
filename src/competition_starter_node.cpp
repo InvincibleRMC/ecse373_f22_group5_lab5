@@ -114,7 +114,7 @@ int main(int argc, char* argv[]){
     std::vector<ros::Subscriber> binCameras = std::vector<ros::Subscriber>(6);
     std::vector<ros::Subscriber> agvCameras= std::vector<ros::Subscriber>(2);
     std::vector<ros::Subscriber> qualityCameras= std::vector<ros::Subscriber>(2);
-    
+
     for(int i=0;i<binCameras.size();i++){
         char stringCam[100];
         std::sprintf(stringCam,"/ariac/logical_camera_bin%d",i+1);
@@ -133,9 +133,10 @@ int main(int argc, char* argv[]){
     
     for(int i=binCameras.size();i<agvCameras.size()+binCameras.size();i++){
         char stringCam[100];
-        std::sprintf(stringCam,"/ariac/logical_camera_agv%d",i+1);
+        int num =i-binCameras.size();
+        std::sprintf(stringCam,"/ariac/logical_camera_agv%d",num+1);
       
-        agvCameras[i-binCameras.size()] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
+        agvCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
         {
             for(osrf_gear::Model m : img->models){
                 camera_data[i].push_back(m);          
@@ -145,9 +146,10 @@ int main(int argc, char* argv[]){
 
     for(int i=agvCameras.size()+binCameras.size();i<agvCameras.size()+binCameras.size()+qualityCameras.size();i++){
         char stringCam[100];
-        std::sprintf(stringCam,"/ariac/quality_control_sensor_%d",i+1);
+        int num =i-(agvCameras.size()+binCameras.size());
+        std::sprintf(stringCam,"/ariac/quality_control_sensor_%d",num+1);
       
-        qualityCameras[i-(agvCameras.size()+binCameras.size())] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
+        qualityCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam,1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void> > > img)
         {
             for(osrf_gear::Model m : img->models){
                 camera_data[i].push_back(m);          
