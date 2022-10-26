@@ -9,15 +9,16 @@
 #include <string>
 #include "geometry_msgs/Pose.h"
 #include "std_msgs/String.h"
-#include <map>
+#include "tf2_ros/transform_listener.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#include "geometry_msgs/TransformStamped.h"
 
 
 std::vector<osrf_gear::Order> order_vector;
- ros::ServiceClient materialLocations;
+ros::ServiceClient materialLocations;
 std::vector<std::vector<osrf_gear::Model>> camera_data = std::vector<std::vector<osrf_gear::Model>>(10);
-//int_vector.clear();
 ros::ServiceClient gml ;
-
+tf2_ros::Buffer tfBuffer;
 
 void orderCallback(const osrf_gear::Order msg){
     order_vector.push_back(msg);
@@ -47,8 +48,32 @@ void printOrderModelPose(){
                         if(strstr(productType.c_str(),model.type.c_str())){
                             geometry_msgs::Point point = model.pose.position;
                             ROS_WARN("name:= %s x:=%f y:=%f z:=%f",model.type.c_str(),point.x,point.y,point.z);
+
+                            std::string frame = "logical_camera_"+su.unit_id+ "_frame";
+                            geometry_msgs::TransformStamped tfStamped;
+                            try {
+                                tfStamped = tfBuffer.lookupTransform("arm1_vacuum_gripper_link",frame,
+                                ros::Time(0.0), ros::Duration(1.0));
+                                ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(),
+                                tfStamped.child_frame_id.c_str());
+                            } catch (tf2::TransformException &ex) {
+                                ROS_ERROR("%s", ex.what());
+                            }
+
+                            geometry_msgs::PoseStamped part_pose, goal_pose;
+                            part_pose.pose = model.pose;
+                           
+                            tf2::doTransform(part_pose, goal_pose, tfStamped);
+
+                            // Add height to the goal pose.
+                            goal_pose.pose.position.z += 0.10; // 10 cm above the part
+                            // Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
+                            goal_pose.pose.orientation.w = 0.707;
+                            goal_pose.pose.orientation.x = 0.0;
+                            goal_pose.pose.orientation.y = 0.707;
+                            goal_pose.pose.orientation.z = 0.0;
+                            tf2::doTransform(part_pose, goal_pose, tfStamped);
                         }
-                       
                     }
                 }
             }
@@ -62,12 +87,12 @@ int main(int argc, char* argv[]){
     
     ros::init(argc, argv, "lab5"); 
     ros::NodeHandle n;
-    //ros::NameSpac
+    tf2_ros::TransformListener tfListener(tfBuffer);
 
     gml= n.serviceClient<osrf_gear::GetMaterialLocations>("/ariac/material_locations");
 
-    ros::ServiceClient start_client =
-    n.serviceClient<std_srvs::Trigger>("/ariac/start_competition");
+    ros::ServiceClient start_client = n.serviceClient<std_srvs::Trigger>("/ariac/start_competition");
+
     // If it's not already ready, wait for it to be ready.
     // Calling the Service using the client before the server is ready would fail.
     if (!start_client.exists()) {
@@ -84,6 +109,7 @@ int main(int argc, char* argv[]){
         ROS_INFO("Competition started!");
     }
 
+    
     ros::Subscriber sub = n.subscribe<osrf_gear::Order>("/ariac/orders", 1000,orderCallback);
     std::vector<ros::Subscriber> binCameras = std::vector<ros::Subscriber>(6);
     std::vector<ros::Subscriber> agvCameras= std::vector<ros::Subscriber>(2);
@@ -128,13 +154,5 @@ int main(int argc, char* argv[]){
             }
         });
     }
-
-
-    
-   
-    ros::spin();
-    
-    
-    
-
+    ros::spin();    
 }

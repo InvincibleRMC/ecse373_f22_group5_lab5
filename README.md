@@ -23,4 +23,4 @@
 ### Launching:
 
 Launch the program using the attached launch file:
-`roslaunch `
+`roslaunch ecse373_f22_group5 lab5.launch`
