@@ -52,6 +52,7 @@
   <build_depend>ecse_373_ariac</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rviz</build_depend>
+  <build_depend>ur_kinematics</build_depend>
   <build_export_depend>ecse_373_ariac</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rviz</build_export_depend>

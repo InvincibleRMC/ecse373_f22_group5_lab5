@@ -10,7 +10,8 @@ project(ecse373_f22_group5)
 find_package(catkin REQUIRED COMPONENTS
   ariac_example
   osrf_gear
-  test_ariac
+  #test_ariac
+  ur_kinematics
   ecse_373_ariac
   roscpp
   rviz
