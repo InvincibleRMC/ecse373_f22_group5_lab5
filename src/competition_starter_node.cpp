@@ -16,6 +16,9 @@
 #include <iostream>
 #include "ur_kinematics/ur_kin.h"
 #include "trajectory_msgs/JointTrajectory.h"
+#include "actionlib/client/simple_action_client.h"
+#include "actionlib/client/terminal_state.h"
+#include "control_msgs/FollowJointTrajectoryAction.h"
 
 std::vector<osrf_gear::Order> order_vector;
 sensor_msgs::JointState joint_states;
@@ -23,6 +26,8 @@ ros::ServiceClient materialLocations;
 std::vector<std::vector<osrf_gear::Model>> camera_data = std::vector<std::vector<osrf_gear::Model>>(10);
 ros::ServiceClient gml;
 tf2_ros::Buffer tfBuffer;
+
+actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> *trajectory_as;
 
 ros::Publisher trajectoryPub;
 
@@ -34,8 +39,8 @@ double q_pose[6], q_des[8][6];
 // std::vector<std::vector<double>> q_des[8][6] = std::vector<std::vector<double>>(8)(6);
 trajectory_msgs::JointTrajectory desired;
 
-static void join_trajectory_method(std::string binName, geometry_msgs::Pose model_pose);
-static void action_method(std::string binName, geometry_msgs::Pose model_pose);
+static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binName, geometry_msgs::Pose model_pose);
+static void action_method(trajectory_msgs::JointTrajectory joint_trajectory);
 
 void orderCallback(const osrf_gear::Order msg)
 {
@@ -91,8 +96,16 @@ void printOrderModelPose()
                         geometry_msgs::Point point = model.pose.position;
                         ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
 
-                        join_trajectory_method(su.unit_id, model.pose);
-                        // action_method();
+                        trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory_method(su.unit_id, model.pose);
+
+                        if (joint_trajectory.header.frame_id == "empty")
+                        {
+                            continue;
+                        }
+
+                        trajectoryPub.publish(joint_trajectory);
+
+                        // action_method(joint_trajectory);
                     }
                 }
             }
@@ -100,7 +113,7 @@ void printOrderModelPose()
     }
 }
 
-static void join_trajectory_method(std::string binName, geometry_msgs::Pose model_pose)
+static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binName, geometry_msgs::Pose model_pose)
 {
 
     ROS_INFO("HERE 8");
@@ -193,12 +206,14 @@ static void join_trajectory_method(std::string binName, geometry_msgs::Pose mode
     int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
     ROS_INFO("INVS SOLs: %d", num_sols);
 
+    trajectory_msgs::JointTrajectory joint_trajectory;
+
     if (num_sols == 0)
     {
-        return;
+        joint_trajectory.header.frame_id = "empty";
+        return joint_trajectory;
     }
     ROS_INFO("INVS SOLs: %d", num_sols);
-    trajectory_msgs::JointTrajectory joint_trajectory;
 
     // ROS_INFO("HERE 2");
     // fflush(stdout);
@@ -282,63 +297,41 @@ static void join_trajectory_method(std::string binName, geometry_msgs::Pose mode
     // How long to take for the movement.
     joint_trajectory.points[1].time_from_start = ros::Duration(1.0);
 
-    trajectoryPub.publish(joint_trajectory);
-
-    // ROS_INFO("HERE 8");
-    // fflush(stdout);
-
-    // std::string frame = "logical_camera_"+su.unit_id+ "_frame";
-    // geometry_msgs::TransformStamped tfStamped;
-    // try {
-    //     tfStamped = tfBuffer.lookupTransform("arm1_vacuum_gripper_link",frame,
-    //     ros::Time(0.0), ros::Duration(1.0));
-    //     ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(),
-    //     tfStamped.child_frame_id.c_str());
-    // } catch (tf2::TransformException &ex) {
-    //     ROS_ERROR("%s", ex.what());
-    // }
-
-    // geometry_msgs::PoseStamped part_pose, goal_pose;
-    // part_pose.pose = model.pose;
-
-    // tf2::doTransform(part_pose, goal_pose, tfStamped);
-
-    // // Add height to the goal pose.
-    // goal_pose.pose.position.z += 0.10; // 10 cm above the part
-    // // Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-    // goal_pose.pose.orientation.w = 0.707;
-    // goal_pose.pose.orientation.x = 0.0;
-    // goal_pose.pose.orientation.y = 0.707;
-    // goal_pose.pose.orientation.z = 0.0;
-
-    // tf2::doTransform(part_pose, goal_pose, tfStamped);
-
-    // throw std::runtime_error("hi");
+    return joint_trajectory;
 }
 
+static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
+{
+    // Create the structure to populate for running the Action Server.
+    control_msgs::FollowJointTrajectoryAction joint_trajectory_as;
+    // It is possible to reuse the JointTrajectory from above
+    joint_trajectory_as.action_goal.goal.trajectory = joint_trajectory;
 
-static void action_method(std::string binName, geometry_msgs::Pose model_pose){}
+    // added header
+    joint_trajectory_as.action_goal.header = joint_trajectory.header;
+
+    // The header and goal (not the tolerances) of the action must be filled out as well.
+    // (rosmsg show control_msgs/FollowJointTrajectoryAction)
+    actionlib::SimpleClientGoalState state =
+        trajectory_as->sendGoalAndWait(joint_trajectory_as.action_goal.goal,
+                                       ros::Duration(30.0), ros::Duration(30.0));
+    ROS_INFO("Action Server returned with status: [%i] %s", state.state_,
+             state.toString().c_str());
+}
 
 int main(int argc, char *argv[])
 {
 
-    // T_pose.resize(4, std::vector<double>(4));
-    // T_des.resize(4, std::vector<double>(4));
-    // q_des.resize(8, std::vector<double>(6));
-
-    ROS_INFO("T_desing");
-    fflush(stdout);
-    // T_des.at(0).at(3) = 0.1;
-    // T_des[1][3] = 1.1;
-    // T_des[2][3] = 2.1;
-    // T_des[3][3] = 3.1;
-    // ros::Duration(1.0).sleep();
-    ROS_INFO("T_desed");
-    fflush(stdout);
-
+    // trajectory_as();
     ros::init(argc, argv, "lab5");
+
     ros::NodeHandle n;
     tf2_ros::TransformListener tfListener(tfBuffer);
+    trajectory_as = new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("ariac/arm/follow_joint_trajectory", true);
+
+    // Instantiate the Action Server client
+
+    // a("ariac/arm/follow_joint_trajectory", true);
 
     gml = n.serviceClient<osrf_gear::GetMaterialLocations>("/ariac/material_locations");
 
