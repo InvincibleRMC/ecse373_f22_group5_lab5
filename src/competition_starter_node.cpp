@@ -47,18 +47,43 @@ void orderCallback(const osrf_gear::Order msg)
     order_vector.push_back(msg);
 }
 
-void jointCallback(const sensor_msgs::JointState j)
+void jointCallback(const sensor_msgs::JointState msg)
 {
-    joint_states = j;
+    joint_states = msg;
 
     std::string str;
-    std::string str2 = "hi";
-    for (std::string s : j.name)
+   // std::string str2 = "hi";
+    for (std::string s : joint_states.name)
     {
         str = str + " " + s + " ";
     }
 
-    memcpy(q_pose, &joint_states.position[0] + 1, 6);
+    //memcpy(q_pose, &joint_states.position[0] + 1, 6);
+
+
+    std::vector<std::string> order;
+    order.reserve(6);
+    order.emplace_back("shoulder_pan_joint");
+    order.emplace_back("shoulder_lift_joint");
+    order.emplace_back("elbow_joint");
+    order.emplace_back("wrist_1_joint");
+    order.emplace_back("wrist_2_joint");
+    order.emplace_back("wrist_3_joint");
+
+    int count = 0;
+
+    for(int i = 0; i < order.size(); ++i) {
+        q_pose[i] = 0.0;
+        for(int j = 0; j < joint_states.name.size(); ++j) {
+           if(order[i] == joint_states.name[j]) {
+               q_pose[i] = joint_states.position[j];
+               count++;
+           }
+        }
+    }
+
+
+
     ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
     ROS_INFO_STREAM_THROTTLE(10, str);
 }
@@ -103,9 +128,11 @@ void printOrderModelPose()
                             continue;
                         }
 
-                        trajectoryPub.publish(joint_trajectory);
+                        // trajectoryPub.publish(joint_trajectory);
 
-                        // action_method(joint_trajectory);
+                        // joint_trajectory.points[0].
+
+                        action_method(joint_trajectory);
                     }
                 }
             }
@@ -164,6 +191,9 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     double x = point.x;
     double y = point.y;
     double z = point.z;
+    x = -0.2;
+    y = 0;
+    z = 0.2;
 
     ROS_INFO("x: %lf, y:%lf, z:%lf", x, y, z);
 
@@ -230,6 +260,7 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
 
     // Set the names of the joints being used. All must be present.
     joint_trajectory.joint_names.clear();
+
     joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
     joint_trajectory.joint_names.push_back("shoulder_pan_joint");
     joint_trajectory.joint_names.push_back("shoulder_lift_joint");
@@ -327,7 +358,8 @@ int main(int argc, char *argv[])
 
     ros::NodeHandle n;
     tf2_ros::TransformListener tfListener(tfBuffer);
-    trajectory_as = new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("ariac/arm/follow_joint_trajectory", true);
+    trajectory_as =
+        new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("/ariac/arm1/arm/follow_joint_trajectory/", true);
 
     // Instantiate the Action Server client
 
