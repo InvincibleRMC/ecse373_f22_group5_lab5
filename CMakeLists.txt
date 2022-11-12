@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(ecse373_f22_group5)
+project(cwru_ecse_373_submission)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)

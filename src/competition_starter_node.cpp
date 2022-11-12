@@ -128,11 +128,11 @@ void printOrderModelPose()
                             continue;
                         }
 
-                        // trajectoryPub.publish(joint_trajectory);
+                        ros::Duration r(3);
+                        trajectoryPub.publish(joint_trajectory);
+                        r.sleep();
 
-                        // joint_trajectory.points[0].
-
-                        action_method(joint_trajectory);
+                        // action_method(joint_trajectory);
                     }
                 }
             }
@@ -142,6 +142,11 @@ void printOrderModelPose()
 
 static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binName, geometry_msgs::Pose model_pose)
 {
+
+   // model_pose.position.x = -0.2;
+   // model_pose.position.y = 0.2;
+   // model_pose.position.z = 0.2;
+
 
     ROS_INFO("HERE 8");
     fflush(stdout);
@@ -167,12 +172,12 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     tf2::doTransform(part_pose, goal_pose, tfStamped);
 
     // Add height to the goal pose.
-    goal_pose.pose.position.z += 0.10; // 10 cm above the part
+   // goal_pose.pose.position.z += 0.10; // 10 cm above the part
                                        //  Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-    goal_pose.pose.orientation.w = 0.707;
-    goal_pose.pose.orientation.x = 0.0;
-    goal_pose.pose.orientation.y = 0.707;
-    goal_pose.pose.orientation.z = 0.0;
+    //goal_pose.pose.orientation.w = 0.707;
+   // goal_pose.pose.orientation.x = 0.0;
+    //goal_pose.pose.orientation.y = 0.707;
+    //goal_pose.pose.orientation.z = 0.0;
 
     // Add height to the goal pose.
     // goal_pose.pose.position.z += 0.10; // 10 cm above the part
@@ -186,14 +191,19 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     //  double y = goal_pose.pose.position.y;
     // double z = goal_pose.pose.position.z;
 
-    geometry_msgs::Point point = model_pose.position;
+    geometry_msgs::Point point = goal_pose.pose.position;
 
     double x = point.x;
     double y = point.y;
     double z = point.z;
-    x = -0.2;
-    y = 0;
-    z = 0.2;
+
+    //x = -0.3;
+    //y = 0.1;
+    //z = -0.3;
+
+    x = x / 2;
+    y = y / 2;
+     z = z / 2;
 
     ROS_INFO("x: %lf, y:%lf, z:%lf", x, y, z);
 
@@ -308,10 +318,14 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     //  ROS_INFO("HERE 6.5");
     // fflush(stdout);
 
-    joint_states.position.at(1);
+    //joint_states.position.at(1);
     // ROS_INFO("HERE 6.55");
     // fflush(stdout);
 
+    if (joint_trajectory.points.size() < 1) {
+        joint_trajectory.header.frame_id = "empty";
+        return joint_trajectory;
+    }
     (joint_trajectory.points.at(1)).positions.at(0) = joint_states.position.at(1);
     // The actuators are commanded in an odd order, enter the joint positions in the correct positions
     // ROS_INFO("HERE 6.6");
