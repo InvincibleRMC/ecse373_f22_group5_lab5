@@ -52,39 +52,11 @@ void jointCallback(const sensor_msgs::JointState msg)
     joint_states = msg;
 
     std::string str;
-   // std::string str2 = "hi";
+    // std::string str2 = "hi";
     for (std::string s : joint_states.name)
     {
         str = str + " " + s + " ";
     }
-
-    //memcpy(q_pose, &joint_states.position[0] + 1, 6);
-
-
-    std::vector<std::string> order;
-    order.reserve(6);
-    order.emplace_back("shoulder_pan_joint");
-    order.emplace_back("shoulder_lift_joint");
-    order.emplace_back("elbow_joint");
-    order.emplace_back("wrist_1_joint");
-    order.emplace_back("wrist_2_joint");
-    order.emplace_back("wrist_3_joint");
-
-    int count = 0;
-
-    for(int i = 0; i < order.size(); ++i) {
-        q_pose[i] = 0.0;
-        for(int j = 0; j < joint_states.name.size(); ++j) {
-           if(order[i] == joint_states.name[j]) {
-               q_pose[i] = joint_states.position[j];
-               count++;
-           }
-        }
-    }
-
-
-
-    ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
     ROS_INFO_STREAM_THROTTLE(10, str);
 }
 
@@ -143,10 +115,9 @@ void printOrderModelPose()
 static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binName, geometry_msgs::Pose model_pose)
 {
 
-   // model_pose.position.x = -0.2;
-   // model_pose.position.y = 0.2;
-   // model_pose.position.z = 0.2;
-
+    // model_pose.position.x = -0.2;
+    // model_pose.position.y = 0.2;
+    // model_pose.position.z = 0.2;
 
     ROS_INFO("HERE 8");
     fflush(stdout);
@@ -171,13 +142,15 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
 
     tf2::doTransform(part_pose, goal_pose, tfStamped);
 
+    ROS_INFO("HERE 10");
+    fflush(stdout);
     // Add height to the goal pose.
-   // goal_pose.pose.position.z += 0.10; // 10 cm above the part
-                                       //  Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-    //goal_pose.pose.orientation.w = 0.707;
-   // goal_pose.pose.orientation.x = 0.0;
-    //goal_pose.pose.orientation.y = 0.707;
-    //goal_pose.pose.orientation.z = 0.0;
+    // goal_pose.pose.position.z += 0.10; // 10 cm above the part
+    //  Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
+    // goal_pose.pose.orientation.w = 0.707;
+    // goal_pose.pose.orientation.x = 0.0;
+    // goal_pose.pose.orientation.y = 0.707;
+    // goal_pose.pose.orientation.z = 0.0;
 
     // Add height to the goal pose.
     // goal_pose.pose.position.z += 0.10; // 10 cm above the part
@@ -191,19 +164,26 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     //  double y = goal_pose.pose.position.y;
     // double z = goal_pose.pose.position.z;
 
+
+    // memcpy(q_pose, &joint_states.position[0] + 1, 6);
+
+
     geometry_msgs::Point point = goal_pose.pose.position;
 
     double x = point.x;
     double y = point.y;
     double z = point.z;
 
-    //x = -0.3;
-    //y = 0.1;
-    //z = -0.3;
+    // x = -0.3;
+    // y = 0.1;
+    // z = -0.3;
 
-    x = x / 2;
-    y = y / 2;
-     z = z / 2;
+    //x = x / 2;
+   // y = y / 2;
+   // z = z / 2;
+
+   ROS_INFO("HERE 11");
+    fflush(stdout);
 
     ROS_INFO("x: %lf, y:%lf, z:%lf", x, y, z);
 
@@ -243,10 +223,36 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     // T_des[2][0] = 0.0; T_des[2][1] = 0.0; T_des[2][2] = 1.0;
     // T_des[3][0] = 0.0; T_des[3][1] = 0.0; T_des[3][2] = 0.0;
 
-    int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
-    ROS_INFO("INVS SOLs: %d", num_sols);
+    ROS_INFO("HERE 12");
+    fflush(stdout);
 
     trajectory_msgs::JointTrajectory joint_trajectory;
+
+    if (joint_states.position[2] == DBL_MIN)
+    {
+        joint_trajectory.header.frame_id = "empty";
+        return joint_trajectory;
+    }
+
+    q_pose[0] = joint_states.position[2];
+    q_pose[1] = joint_states.position[3];
+    q_pose[2] = joint_states.position[0];
+    q_pose[3] = joint_states.position[4];
+    q_pose[4] = joint_states.position[5];
+    q_pose[5] = joint_states.position[6];
+
+
+    ROS_INFO("HERE 13");
+    fflush(stdout);
+
+
+    ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
+
+    int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
+
+    ROS_INFO("INVS SOLs: %d", num_sols);
+
+    
 
     if (num_sols == 0)
     {
@@ -257,6 +263,8 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
 
     // ROS_INFO("HERE 2");
     // fflush(stdout);
+    ROS_INFO("HERE 13");
+    fflush(stdout);
 
     // Fill out the joint trajectory header.
     // Each joint trajectory should have an non-monotonically increasing sequence number.
@@ -283,7 +291,7 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     // fflush(stdout);
 
     // Set a start and end point.
-    joint_trajectory.points.resize(2);
+    joint_trajectory.points.resize(3);
 
     // ROS_INFO("HERE 5");
     // fflush(stdout);
@@ -318,11 +326,12 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     //  ROS_INFO("HERE 6.5");
     // fflush(stdout);
 
-    //joint_states.position.at(1);
-    // ROS_INFO("HERE 6.55");
-    // fflush(stdout);
+    // joint_states.position.at(1);
+    //  ROS_INFO("HERE 6.55");
+    //  fflush(stdout);
 
-    if (joint_trajectory.points.size() < 1) {
+    if (joint_trajectory.points.size() < 1)
+    {
         joint_trajectory.header.frame_id = "empty";
         return joint_trajectory;
     }
@@ -367,6 +376,7 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
 int main(int argc, char *argv[])
 {
 
+    joint_states.position[2] == DBL_MIN;
     // trajectory_as();
     ros::init(argc, argv, "lab5");
 

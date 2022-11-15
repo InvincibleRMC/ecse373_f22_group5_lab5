@@ -2,5 +2,5 @@
     <include file="$(find ecse_373_ariac)/launch/ecse_373_ariac.launch">
         <arg name="python" value="false"/>
     </include>
-    <node name="lab5" pkg="ecse373_f22_group5" type="lab5" output="screen"/>
+    <node name="lab5" pkg="cwru_ecse_373_submission" type="lab5" output="screen"/>
 </launch>
