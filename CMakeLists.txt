@@ -118,8 +118,8 @@ catkin_package(
 
 
 add_executable(lab5 src/competition_starter_node.cpp)
-target_link_libraries(lab5 ur10_kin ${catkin_LIBRARIES})
 add_dependencies(lab5 ${catkin_EXPORTED_TARGETS})
+target_link_libraries(lab5 ur10_kin ${catkin_LIBRARIES})
 
 ###########
 ## Build ##
