@@ -178,9 +178,9 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     // y = 0.1;
     // z = -0.3;
 
-    //x = x / 2;
-   // y = y / 2;
-   // z = z / 2;
+    x = x / 2;
+    y = y / 2;
+    z = z / 2;
 
    ROS_INFO("HERE 11");
     fflush(stdout);
@@ -291,7 +291,7 @@ static trajectory_msgs::JointTrajectory get_trajectory_method(std::string binNam
     // fflush(stdout);
 
     // Set a start and end point.
-    joint_trajectory.points.resize(3);
+    joint_trajectory.points.resize(2);
 
     // ROS_INFO("HERE 5");
     // fflush(stdout);
