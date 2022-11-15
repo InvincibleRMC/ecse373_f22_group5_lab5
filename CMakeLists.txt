@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   ariac_example
   osrf_gear
   #test_ariac
-  ur_kinematics
+ # ur10_kin
   ecse_373_ariac
   roscpp
   rviz
@@ -118,7 +118,7 @@ catkin_package(
 
 
 add_executable(lab5 src/competition_starter_node.cpp)
-target_link_libraries(lab5 ${catkin_LIBRARIES})
+target_link_libraries(lab5 ur10_kin ${catkin_LIBRARIES})
 add_dependencies(lab5 ${catkin_EXPORTED_TARGETS})
 
 ###########
