@@ -330,11 +330,11 @@ void printOrderModelPose()
                             continue;
                         }
 
-                        // ros::Duration r(3);
-                        // trajectoryPub.publish(joint_trajectory);
-                        // r.sleep();
+                        ros::Duration r(3);
+                        trajectoryPub.publish(joint_trajectory);
+                        r.sleep();
 
-                        action_method(joint_trajectory);
+                        //action_method(joint_trajectory);
                         //action_method(home_trajectory);
                     }
                 }
