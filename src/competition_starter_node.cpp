@@ -21,7 +21,7 @@
 #include "control_msgs/FollowJointTrajectoryAction.h"
 
 std::vector<osrf_gear::Order> order_vector;
-sensor_msgs::JointState* joint_states;
+sensor_msgs::JointState joint_states;
 ros::ServiceClient materialLocations;
 std::vector<std::vector<osrf_gear::Model>> camera_data = std::vector<std::vector<osrf_gear::Model>>(10);
 ros::ServiceClient gml;
@@ -44,31 +44,51 @@ static void action_method(trajectory_msgs::JointTrajectory *joint_trajectory);
 
 void orderCallback(const osrf_gear::Order msg)
 {
+    ROS_INFO("Starting Order callback");
+    fflush(stdout);
     order_vector.push_back(msg);
 }
 
 void jointCallback(const sensor_msgs::JointState msg)
 {
-    *joint_states = msg;
+    ROS_INFO("Starting Joint callback");
+    fflush(stdout);
+
+    joint_states = msg;
+    ROS_INFO("Here 100");
+    fflush(stdout);
+
 
     std::string str;
     // std::string str2 = "hi";
-    for (std::string s : joint_states->name)
+    ROS_INFO("Here 100");
+    fflush(stdout);
+    for (std::string s : joint_states.name)
     {
         str = str + " " + s + " ";
+        ROS_INFO("Here 101");
+        fflush(stdout);
     }
     ROS_INFO_STREAM_THROTTLE(10, str);
+    ROS_INFO("Here 102");
+    fflush(stdout);
 }
 
 void printOrderModelPose()
 {
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
-
+    ROS_INFO("HERE -10000");
+        fflush(stdout);
     for (osrf_gear::Shipment shipment : shipments)
     {
+        ROS_INFO("HERE -1000");
+        fflush(stdout);
 
         for (osrf_gear::Product product : shipment.products)
         {
+
+            ROS_INFO("HERE -900");
+            fflush(stdout);
 
             std::string productType = product.type;
 
@@ -76,30 +96,58 @@ void printOrderModelPose()
             gmlService.request.material_type = productType;
             gml.call(gmlService);
 
+
+            ROS_INFO("HERE -800");
+            fflush(stdout);
+
             for (osrf_gear::StorageUnit su : gmlService.response.storage_units)
             {
 
+                ROS_INFO("HERE -2");
+                fflush(stdout);
                 const char *binName = su.unit_id.c_str();
                 int binNum;
                 sscanf(binName, "bin%d", &binNum);
                 binNum--;
+                ROS_INFO("HERE -3");
+                fflush(stdout);
 
-                for (osrf_gear::Model model : camera_data[binNum])
+
+
+                for (osrf_gear::Model model : camera_data.at(binNum))
                 {
+                    ROS_INFO("HERE -5");
+                    fflush(stdout);
+                    ROS_INFO("%s", productType.c_str());
+                    fflush(stdout);
+                    ROS_INFO("HERE -6");
+                    fflush(stdout);
+                    ROS_INFO("%s", model.type.c_str());
+                    fflush(stdout);
+                    ROS_INFO("HERE -7)");
+                    fflush(stdout);                    
+                    
                     if (strstr(productType.c_str(), model.type.c_str()))
                     {
                         ROS_INFO("HERE- 1");
-                        // fflush(stdout);
+                        fflush(stdout);
                         geometry_msgs::Point point = model.pose.position;
                         ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
+                        fflush(stdout);
 
                         trajectory_msgs::JointTrajectory joint_trajectory;
                         get_trajectory_method(&joint_trajectory, su.unit_id, model.pose);
 
+                        ROS_INFO("PAIN");
+                        fflush(stdout);
                         if (joint_trajectory.header.frame_id == "empty")
                         {
+                            ROS_INFO("CONTINUED");
+                            fflush(stdout);
                             continue;
                         }
+                        ROS_INFO("PAIN");
+                        fflush(stdout);
 
                         ros::Duration r(3);
                         trajectoryPub.publish(joint_trajectory);
@@ -112,6 +160,8 @@ void printOrderModelPose()
             }
         }
     }
+    ROS_INFO("Finished print");
+    fflush(stdout);
 }
 
 static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajectory, std::string binName, geometry_msgs::Pose model_pose)
@@ -232,25 +282,27 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     ROS_INFO("HERE 12.5");
     fflush(stdout);
 
-    if (joint_states == nullptr) {
+    if (joint_states.header.frame_id == "uninitialized") {
         ROS_INFO("HERE 12.75");
         fflush(stdout);
         joint_trajectory->header.frame_id = "empty";
+        ROS_INFO("HERE 12.8");
+        fflush(stdout);
         return;
     }
 
     ROS_INFO("HERE 12.7");
     fflush(stdout);
     
-    ROS_INFO_STREAM("Joinst States Name: " << joint_states->name[0]);
+    ROS_INFO_STREAM("Joinst States Name: " << joint_states.name[0]);
     fflush(stdout);
     
-    q_pose[0] = (joint_states->position)[2];
-    q_pose[1] = (joint_states->position)[3];
-    q_pose[2] = (joint_states->position)[0];
-    q_pose[3] = (joint_states->position)[4];
-    q_pose[4] = (joint_states->position)[5];
-    q_pose[5] = (joint_states->position)[6];
+    q_pose[0] = (joint_states.position)[2];
+    q_pose[1] = (joint_states.position)[3];
+    q_pose[2] = (joint_states.position)[0];
+    q_pose[3] = (joint_states.position)[4];
+    q_pose[4] = (joint_states.position)[5];
+    q_pose[5] = (joint_states.position)[6];
 
     ROS_INFO("HERE 13");
     fflush(stdout);
@@ -308,11 +360,11 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     joint_trajectory->points[0].positions.resize(joint_trajectory->joint_names.size());
     for (int indy = 0; indy < joint_trajectory->joint_names.size(); indy++)
     {
-        for (int indz = 0; indz < joint_states->name.size(); indz++)
+        for (int indz = 0; indz < joint_states.name.size(); indz++)
         {
-            if (joint_trajectory->joint_names[indy] == joint_states->name[indz])
+            if (joint_trajectory->joint_names[indy] == joint_states.name[indz])
             {
-                joint_trajectory->points[0].positions[indy] = joint_states->position[indz];
+                joint_trajectory->points[0].positions[indy] = joint_states.position[indz];
                 break;
             }
         }
@@ -347,7 +399,7 @@ static void action_method(trajectory_msgs::JointTrajectory *joint_trajectory)
 int main(int argc, char *argv[])
 {
 
-    joint_states = nullptr;
+    joint_states.header.frame_id = "uninitialized";
     // trajectory_as();
     ros::init(argc, argv, "lab5");
 
@@ -398,12 +450,20 @@ int main(int argc, char *argv[])
         binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
                                                                    {
             for(osrf_gear::Model m : img->models){
-                camera_data[i].push_back(m);          
+                camera_data.at(i).push_back(m);          
             }
             printOrderModelPose();
             for(osrf_gear::Model m : img->models){
-                camera_data[i].pop_back();
-            } });
+                ROS_INFO("Poping Camera %d", i);
+                fflush(stdout);
+                camera_data.at(i).pop_back();
+            }
+            ROS_INFO("End of logicalcam callback");
+            fflush(stdout);
+            });
+            
+        ROS_INFO("END OF CALLBACK");
+        fflush(stdout);
     }
 
     for (int i = binCameras.size(); i < agvCameras.size() + binCameras.size(); i++)
@@ -414,6 +474,8 @@ int main(int argc, char *argv[])
 
         agvCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
                                                                      {
+            ROS_INFO("Starting AGV callback");
+            fflush(stdout);
             for(osrf_gear::Model m : img->models){
                 camera_data[i].push_back(m);          
             } });
@@ -427,6 +489,8 @@ int main(int argc, char *argv[])
 
         qualityCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
                                                                          {
+            ROS_INFO("Starting QC callback");
+            fflush(stdout);
             for(osrf_gear::Model m : img->models){
                 camera_data[i].push_back(m);          
             } });
@@ -434,5 +498,7 @@ int main(int argc, char *argv[])
 
     ros::Subscriber jointSub = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1000, jointCallback);
 
+    ROS_INFO("Spinnging");
+    fflush(stdout);
     ros::spin();
 }
