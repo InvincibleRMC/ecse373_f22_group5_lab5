@@ -118,7 +118,7 @@ catkin_package(
 
 
 add_executable(lab5 src/competition_starter_node.cpp)
-add_dependencies(lab5 ${catkin_EXPORTED_TARGETS})
+# add_dependencies(lab5 ${catkin_EXPORTED_TARGETS})
 target_link_libraries(lab5 ur10_kin ${catkin_LIBRARIES})
 
 ###########
@@ -158,9 +158,10 @@ include_directories(
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(${PROJECT_NAME}_node
-#   ${catkin_LIBRARIES}
-# )
+target_link_libraries(lab5
+  ${catkin_LIBRARIES}
+  ur10_kin
+)
 
 #############
 ## Install ##

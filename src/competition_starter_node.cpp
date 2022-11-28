@@ -329,7 +329,7 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     // Each joint trajectory should have an non-monotonically increasing sequence number.
     static int count = 0;
     joint_trajectory->header.seq = count++;
-    joint_trajectory->header.stamp = ros::Time::now(); // When was this message created.
+    joint_trajectory->header.stamp = ros::Time::now() + ros::Duration(1.0); // When was this message created.
     joint_trajectory->header.frame_id = "/world";      // Frame in which this is specified
 
     ROS_INFO("HERE 14");
@@ -357,13 +357,14 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
 
     // joint_states = joints;
     //  Set the start point to the current position of the joints from joint_states.
-    joint_trajectory->points[0].positions.resize(joint_trajectory->joint_names.size());
+    
     for (int indy = 0; indy < joint_trajectory->joint_names.size(); indy++)
     {
         for (int indz = 0; indz < joint_states.name.size(); indz++)
         {
             if (joint_trajectory->joint_names[indy] == joint_states.name[indz])
             {
+                joint_trajectory->points[indy].positions.resize(joint_trajectory->joint_names.size());
                 joint_trajectory->points[0].positions[indy] = joint_states.position[indz];
                 break;
             }
@@ -375,6 +376,11 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
 
     // When to start (immediately upon receipt).
     joint_trajectory->points[0].time_from_start = ros::Duration(0.0);
+
+    for (int i = 1; i < joint_trajectory->points.size();i++)
+    {
+        joint_trajectory->points[i].time_from_start = ros::Duration(i);
+    }
 }
 
 static void action_method(trajectory_msgs::JointTrajectory *joint_trajectory)
