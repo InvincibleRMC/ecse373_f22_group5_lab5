@@ -8,16 +8,14 @@ project(cwru_ecse_373_submission)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  ariac_example
+  #ariac_example
   osrf_gear
   #test_ariac
  # ur10_kin
   ecse_373_ariac
   roscpp
   rviz
-  tf2_ros
-  tf2
-  actionlib
+  ur_kinematics
 )
 
 ## System dependencies are found with CMake's conventions
@@ -119,8 +117,7 @@ catkin_package(
 
 add_executable(lab5 src/competition_starter_node.cpp)
 # add_dependencies(lab5 ${catkin_EXPORTED_TARGETS})
-target_link_libraries(lab5 ur10_kin ${catkin_LIBRARIES})
-
+#
 ###########
 ## Build ##
 ###########

@@ -39,7 +39,7 @@ double q_pose[6], q_des[8][6];
 // std::vector<std::vector<double>> q_des[8][6] = std::vector<std::vector<double>>(8)(6);
 trajectory_msgs::JointTrajectory desired;
 
-static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajectory, std::string binName, geometry_msgs::Pose model_pose);
+static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajectory, std::string binName, geometry_msgs::Pose model_pose, bool home);
 static void action_method(trajectory_msgs::JointTrajectory *joint_trajectory);
 
 void orderCallback(const osrf_gear::Order msg)
@@ -57,7 +57,6 @@ void jointCallback(const sensor_msgs::JointState msg)
     joint_states = msg;
     ROS_INFO("Here 100");
     fflush(stdout);
-
 
     std::string str;
     // std::string str2 = "hi";
@@ -78,7 +77,7 @@ void printOrderModelPose()
 {
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
     ROS_INFO("HERE -10000");
-        fflush(stdout);
+    fflush(stdout);
     for (osrf_gear::Shipment shipment : shipments)
     {
         ROS_INFO("HERE -1000");
@@ -96,7 +95,6 @@ void printOrderModelPose()
             gmlService.request.material_type = productType;
             gml.call(gmlService);
 
-
             ROS_INFO("HERE -800");
             fflush(stdout);
 
@@ -112,8 +110,6 @@ void printOrderModelPose()
                 ROS_INFO("HERE -3");
                 fflush(stdout);
 
-
-
                 for (osrf_gear::Model model : camera_data.at(binNum))
                 {
                     ROS_INFO("HERE -5");
@@ -125,8 +121,8 @@ void printOrderModelPose()
                     ROS_INFO("%s", model.type.c_str());
                     fflush(stdout);
                     ROS_INFO("HERE -7)");
-                    fflush(stdout);                    
-                    
+                    fflush(stdout);
+
                     if (strstr(productType.c_str(), model.type.c_str()))
                     {
                         ROS_INFO("HERE- 1");
@@ -136,7 +132,7 @@ void printOrderModelPose()
                         fflush(stdout);
 
                         trajectory_msgs::JointTrajectory joint_trajectory;
-                        get_trajectory_method(&joint_trajectory, su.unit_id, model.pose);
+                        get_trajectory_method(&joint_trajectory, su.unit_id, model.pose, false);
 
                         ROS_INFO("PAIN");
                         fflush(stdout);
@@ -153,6 +149,11 @@ void printOrderModelPose()
                         trajectoryPub.publish(joint_trajectory);
                         r.sleep();
 
+                        get_trajectory_method(&joint_trajectory, su.unit_id, model.pose, true);
+                        r.sleep();
+
+                        trajectoryPub.publish(joint_trajectory);
+
                         // action_method(&joint_trajectory);
                         // action_method(&home_trajectory);
                     }
@@ -164,7 +165,7 @@ void printOrderModelPose()
     fflush(stdout);
 }
 
-static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajectory, std::string binName, geometry_msgs::Pose model_pose)
+static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajectory, std::string binName, geometry_msgs::Pose model_pose, bool home)
 {
     ROS_INFO("HERE 8");
     fflush(stdout);
@@ -193,40 +194,31 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     ROS_INFO("HERE 10");
     fflush(stdout);
     // Add height to the goal pose.
-    // goal_pose.pose.position.z += 0.10; // 10 cm above the part
+    goal_pose.pose.position.z += 0.10; // 10 cm above the part
     //  Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-    // goal_pose.pose.orientation.w = 0.707;
-    // goal_pose.pose.orientation.x = 0.0;
-    // goal_pose.pose.orientation.y = 0.707;
-    // goal_pose.pose.orientation.z = 0.0;
 
-    // Add height to the goal pose.
-    // goal_pose.pose.position.z += 0.10; // 10 cFpointm above the part
-    // // Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
-    // goal_pose.pose.orientation.w = 0.707;
-    // goal_pose.pose.orientation.x = 0.0;
-    // goal_pose.pose.orientation.y = 0.707;
-    // goal_pose.pose.orientation.z = 0.0;
 
-    // double x = goal_pose.pose.position.x;
-    //  double y = goal_pose.pose.position.y;
-    // double z = goal_pose.pose.position.z;
-
-    // memcpy(q_pose, &joint_states->position[0] + 1, 6);
+    goal_pose.pose.orientation.w = 0.707;
+    goal_pose.pose.orientation.x = 0.0;
+    goal_pose.pose.orientation.y = 0.707;
+    goal_pose.pose.orientation.z = 0.0;
 
     geometry_msgs::Point goalPoint = goal_pose.pose.position;
 
-    double x = goalPoint.x;
-    double y = goalPoint.y;
-    double z = goalPoint.z;
+    double x, y, z;
 
-    // x = -0.3;
-    //  y = 0.1;
-    // z = -0.3;
-
-    // x = x / 2;
-    // y = y / 2;
-    // z = z / 2;
+    if (!home)
+    {
+        x = goalPoint.x;
+        y = goalPoint.y;
+        z = goalPoint.z;
+    }
+    else
+    {
+        x = -0.4;
+        y = 0;
+        z = 0.2;
+    }
 
     ROS_INFO("HERE 11");
     fflush(stdout);
@@ -240,7 +232,7 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     T_des[1][3] = y;
     ROS_INFO("HERE 0.2");
     fflush(stdout);
-    T_des[2][3] = z + 0.3;
+    T_des[2][3] = z;
     ROS_INFO("HERE 0.3");
     fflush(stdout);
     T_des[3][3] = 1;
@@ -282,7 +274,8 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     ROS_INFO("HERE 12.5");
     fflush(stdout);
 
-    if (joint_states.header.frame_id == "uninitialized") {
+    if (joint_states.header.frame_id == "uninitialized")
+    {
         ROS_INFO("HERE 12.75");
         fflush(stdout);
         joint_trajectory->header.frame_id = "empty";
@@ -293,10 +286,10 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
 
     ROS_INFO("HERE 12.7");
     fflush(stdout);
-    
+
     ROS_INFO_STREAM("Joinst States Name: " << joint_states.name[0]);
     fflush(stdout);
-    
+
     q_pose[0] = (joint_states.position)[2];
     q_pose[1] = (joint_states.position)[3];
     q_pose[2] = (joint_states.position)[0];
@@ -307,7 +300,7 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     ROS_INFO("HERE 13");
     fflush(stdout);
 
-    ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
+    // ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
 
     int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
 
@@ -330,7 +323,7 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     static int count = 0;
     joint_trajectory->header.seq = count++;
     joint_trajectory->header.stamp = ros::Time::now() + ros::Duration(1.0); // When was this message created.
-    joint_trajectory->header.frame_id = "/world";      // Frame in which this is specified
+    joint_trajectory->header.frame_id = "/world";                           // Frame in which this is specified
 
     ROS_INFO("HERE 14");
     fflush(stdout);
@@ -357,14 +350,14 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
 
     // joint_states = joints;
     //  Set the start point to the current position of the joints from joint_states.
-    
+    joint_trajectory->points[0].positions.resize(joint_trajectory->joint_names.size());
+
     for (int indy = 0; indy < joint_trajectory->joint_names.size(); indy++)
     {
         for (int indz = 0; indz < joint_states.name.size(); indz++)
         {
             if (joint_trajectory->joint_names[indy] == joint_states.name[indz])
             {
-                joint_trajectory->points[indy].positions.resize(joint_trajectory->joint_names.size());
                 joint_trajectory->points[0].positions[indy] = joint_states.position[indz];
                 break;
             }
@@ -377,10 +370,40 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     // When to start (immediately upon receipt).
     joint_trajectory->points[0].time_from_start = ros::Duration(0.0);
 
-    for (int i = 1; i < joint_trajectory->points.size();i++)
+    // Choose the solution that keeps the elbow joint as high as possible
+    double target_angle = 3.0 / 2.0 * M_PI; // The elbow is straight up when the shoulder joint is 3/2*pi
+    int best_solution_index = -1;
+    double best_angle = 10000; // Smaller is better, so this initial score will be beaten by any solution
+    for (int i = 0; i < num_sols; i++)
     {
-        joint_trajectory->points[i].time_from_start = ros::Duration(i);
+        double pan_angle = q_des[i][0];
+        double shoulder_angle = q_des[i][1];
+        double wrist_1_angle = q_des[i][3];
+
+        // Ignore solutions where the base or wrist are pointed backwards
+        if (abs(M_PI - pan_angle) >= M_PI / 2 || abs(M_PI - wrist_1_angle) >= M_PI / 2)
+        {
+            continue;
+        }
+
+        // Get the angle between the ideal shoulder angle and this solution's shoulder angle
+        double dist = std::min(fabs(shoulder_angle - target_angle), 2.0 * M_PI - fabs(shoulder_angle - target_angle));
+        if (dist < best_angle)
+        {
+            best_angle = dist;
+            best_solution_index = i;
+        }
     }
+
+    joint_trajectory->points[1].positions.resize(joint_trajectory->joint_names.size());
+    joint_trajectory->points[1].positions[0] = joint_states.position[1];
+
+    for (int indy = 0; indy < 6; indy++)
+    {
+        joint_trajectory->points[1].positions[indy + 1] = q_des[best_solution_index][indy];
+    }
+
+    joint_trajectory->points[1].time_from_start = ros::Duration(1.0);
 }
 
 static void action_method(trajectory_msgs::JointTrajectory *joint_trajectory)
@@ -465,9 +488,8 @@ int main(int argc, char *argv[])
                 camera_data.at(i).pop_back();
             }
             ROS_INFO("End of logicalcam callback");
-            fflush(stdout);
-            });
-            
+            fflush(stdout); });
+
         ROS_INFO("END OF CALLBACK");
         fflush(stdout);
     }
