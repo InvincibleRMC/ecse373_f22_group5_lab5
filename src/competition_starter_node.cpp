@@ -131,8 +131,10 @@ void printOrderModelPose()
                         ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
                         fflush(stdout);
 
-                        trajectory_msgs::JointTrajectory joint_trajectory;
+                        trajectory_msgs::JointTrajectory joint_trajectory,home_trajectory;
                         get_trajectory_method(&joint_trajectory, su.unit_id, model.pose, false);
+
+                        get_trajectory_method(&home_trajectory, su.unit_id, model.pose, true);
 
                         ROS_INFO("PAIN");
                         fflush(stdout);
@@ -146,16 +148,18 @@ void printOrderModelPose()
                         fflush(stdout);
 
                         ros::Duration r(3);
-                        trajectoryPub.publish(joint_trajectory);
+                        // trajectoryPub.publish(joint_trajectory);
+                        // r.sleep();
+
+                        // trajectoryPub.publish(home_trajectory);
+                        // r.sleep();
+
+                        
+
+                        action_method(&joint_trajectory);
                         r.sleep();
-
-                        get_trajectory_method(&joint_trajectory, su.unit_id, model.pose, true);
+                        action_method(&home_trajectory);
                         r.sleep();
-
-                        trajectoryPub.publish(joint_trajectory);
-
-                        // action_method(&joint_trajectory);
-                        // action_method(&home_trajectory);
                     }
                 }
             }
@@ -290,12 +294,12 @@ static void get_trajectory_method(trajectory_msgs::JointTrajectory *joint_trajec
     ROS_INFO_STREAM("Joinst States Name: " << joint_states.name[0]);
     fflush(stdout);
 
-    q_pose[0] = (joint_states.position)[2];
-    q_pose[1] = (joint_states.position)[3];
-    q_pose[2] = (joint_states.position)[0];
-    q_pose[3] = (joint_states.position)[4];
-    q_pose[4] = (joint_states.position)[5];
-    q_pose[5] = (joint_states.position)[6];
+    // q_pose[0] = (joint_states.position)[2];
+    // q_pose[1] = (joint_states.position)[3];
+    // q_pose[2] = (joint_states.position)[0];
+    // q_pose[3] = (joint_states.position)[4];
+    // q_pose[4] = (joint_states.position)[5];
+    // q_pose[5] = (joint_states.position)[6];
 
     ROS_INFO("HERE 13");
     fflush(stdout);
