@@ -190,7 +190,7 @@ void printOrderModelPose()
                         // ROS_INFO("PAIN");
                         //  fflush(stdout);
 
-                        ros::Duration r(5);
+                        ros::Duration r(1.5);
                         // trajectoryPub.publish(joint_trajectory);
                         // r.sleep();
 
@@ -424,22 +424,25 @@ static void operateGripper(bool attach, geometry_msgs::Point dest)
     //         copy.z = dest.z + 0.3;
     //     }
     action_method(get_trajectory(copy));
-    // ROS_INFO
+    ROS_INFO(attach ? "Picking Up" : "Dropping");
     int i = 0;
-    while (!(gripper_state.attached == attach))
-    {
-        if(i>5){
-            break;
-        }
-        i++;
-        ROS_ERROR_STREAM(gripper_state.attached);
-        ROS_ERROR_STREAM(attach);
-        srv.request.enable = attach;
-        // succeeded = 
-        gripper_client.call(srv);
+    // while (!(gripper_state.attached == attach))
+    // {
+    //     if(i>5){
+    //         break;
+    //     }
+    //     i++;
+        // ROS_ERROR_STREAM(gripper_state.attached);
+        // ROS_ERROR_STREAM(attach);
+       
         // ROS_INFO("Inside operate Gripper");
         ros::Duration s(1);
         s.sleep();
+         srv.request.enable = attach;
+        // succeeded = 
+        gripper_client.call(srv);
+        s.sleep();
+
         copy.z = copy.z + 0.1;
         action_method(get_trajectory(copy));
         // s.sleep();
@@ -447,7 +450,7 @@ static void operateGripper(bool attach, geometry_msgs::Point dest)
         // s.sleep();
         // copy.z = dest.z + 0.1;
         // action_method(get_trajectory(copy));
-    }
+    // }
     ROS_WARN("Left loop gripper");
 }
 
