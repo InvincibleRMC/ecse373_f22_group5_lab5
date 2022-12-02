@@ -47,6 +47,10 @@ ros::ServiceClient gripper_client;
 // osrf_gear::VacuumGripperControl gripper_control_srv;
 osrf_gear::VacuumGripperState gripper_state;
 
+// Phase 2
+static trajectory_msgs::JointTrajectory trajectoryHelper();
+static void moveArm(double pose);
+
 static void operateGripper(bool attach, geometry_msgs::Point dest);
 
 void orderCallback(const osrf_gear::Order msg)
@@ -198,16 +202,36 @@ void printOrderModelPose()
                         // r.sleep();
 
                         // action_method(joint_trajectory);
+                        double agv2 = 0;
+                        double agv1 = 2.1;
+                        moveArm(agv1);
+                        geometry_msgs::Point agv1Point;
+                        agv1Point.x = -0.1;
+                        agv1Point.y = 0.1;
+                        agv1Point.z = -0.1;
+                        r.sleep();
+                        operateGripper(false, agv1Point);
 
+                        ROS_ERROR("FAIL");
+                        r.sleep();
                         operateGripper(true, goalPoint);
+
+
 
                         // action_method(home_trajectory);
                         r.sleep();
                         action_method(get_trajectory(homePoint));
                         r.sleep();
-                        // goalPoint.z = goalPoint.z + 0.2;
-                        operateGripper(false, goalPoint);
+
+                        
+
+                        moveArm(agv1);
                         r.sleep();
+                        
+                        // goalPoint.z = goalPoint.z + 0.2;
+                        operateGripper(false, agv1Point);
+                        r.sleep();
+                        moveArm(agv2);
                         action_method(get_trajectory(homePoint));
                         r.sleep();
                     }
@@ -221,7 +245,7 @@ void printOrderModelPose()
 
 static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest)
 {
-    trajectory_msgs::JointTrajectory joint_trajectory;
+    trajectory_msgs::JointTrajectory joint_trajectory = trajectoryHelper();
 
     double x = dest.x;
     double y = dest.y;
@@ -285,52 +309,19 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
 
     // ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
 
-    int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
-
-    ROS_INFO("INVS SOLs: %d", num_sols);
-
-    if (num_sols == 0)
-    {
-        joint_trajectory.header.frame_id = "empty";
-        return joint_trajectory;
-    }
-    ROS_INFO("INVS SOLs: %d", num_sols);
+    
+    
 
     // Fill out the joint trajectory header.
     // Each joint trajectory should have an non-monotonically increasing sequence number.
-    static int count = 0;
-    joint_trajectory.header.seq = count++;
-    joint_trajectory.header.stamp = ros::Time::now() + ros::Duration(1.0); // When was this message created.
-    joint_trajectory.header.frame_id = "/world";                           // Frame in which this is specified
+    
 
-    // ROS_INFO("HERE 14");
-    // fflush(stdout);
 
-    // Set the names of the joints being used. All must be present.
-    joint_trajectory.joint_names.clear();
 
-    joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
-    joint_trajectory.joint_names.push_back("shoulder_pan_joint");
-    joint_trajectory.joint_names.push_back("shoulder_lift_joint");
-    joint_trajectory.joint_names.push_back("elbow_joint");
-    joint_trajectory.joint_names.push_back("wrist_1_joint");
-    joint_trajectory.joint_names.push_back("wrist_2_joint");
-    joint_trajectory.joint_names.push_back("wrist_3_joint");
 
-    // ROS_INFO("HERE 15");
-    // fflush(stdout);
 
-    // Set a start and end point.
-    joint_trajectory.points.resize(2);
 
-    // ROS_INFO("HERE 16");
-    // fflush(stdout);
-
-    // joint_states = joints;
-    //  Set the start point to the current position of the joints from joint_states.
-    joint_trajectory.points[0].positions.resize(joint_trajectory.joint_names.size());
-
-    for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
+     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     {
         for (int indz = 0; indz < joint_states.name.size(); indz++)
         {
@@ -342,11 +333,17 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
         }
     }
 
-    // ROS_INFO("HERE 17");
-    // fflush(stdout);
+    int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
 
-    // When to start (immediately upon receipt).
-    joint_trajectory.points[0].time_from_start = ros::Duration(0.0);
+    // trajectory_msgs::JointTrajectory joint_trajectory;
+
+    ROS_INFO("INVS SOLs: %d", num_sols);
+
+    if (num_sols == 0)
+    {
+        joint_trajectory.header.frame_id = "empty";
+        return joint_trajectory;
+    }
 
     // Choose the solution that keeps the elbow joint as high as possible
     double target_angle = 3.0 / 2.0 * M_PI; // The elbow is straight up when the shoulder joint is 3/2*pi
@@ -373,16 +370,64 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
         }
     }
 
-    joint_trajectory.points[1].positions.resize(joint_trajectory.joint_names.size());
-    joint_trajectory.points[1].positions[0] = joint_states.position[1];
-
     for (int indy = 0; indy < 6; indy++)
     {
         joint_trajectory.points[1].positions[indy + 1] = q_des[best_solution_index][indy];
     }
 
     joint_trajectory.points[1].time_from_start = ros::Duration(1.0);
+
     return joint_trajectory;
+}
+
+static trajectory_msgs::JointTrajectory trajectoryHelper(){
+    trajectory_msgs::JointTrajectory joint_trajectory;
+    static int count = 0;
+    joint_trajectory.header.seq = count++;
+    joint_trajectory.header.stamp = ros::Time::now() + ros::Duration(1.0); // When was this message created.
+    joint_trajectory.header.frame_id = "/world";                           // Frame in which this is specified
+
+    // Set the names of the joints being used. All must be present.
+    joint_trajectory.joint_names.clear();
+
+    joint_trajectory.joint_names.push_back("linear_arm_actuator_joint");
+    joint_trajectory.joint_names.push_back("shoulder_pan_joint");
+    joint_trajectory.joint_names.push_back("shoulder_lift_joint");
+    joint_trajectory.joint_names.push_back("elbow_joint");
+    joint_trajectory.joint_names.push_back("wrist_1_joint");
+    joint_trajectory.joint_names.push_back("wrist_2_joint");
+    joint_trajectory.joint_names.push_back("wrist_3_joint");
+
+    // Set a start and end point.
+    joint_trajectory.points.resize(2);
+
+    //  Set the start point to the current position of the joints from joint_states.
+    joint_trajectory.points[0].positions.resize(joint_trajectory.joint_names.size());
+
+    // When to start (immediately upon receipt).
+    joint_trajectory.points[0].time_from_start = ros::Duration(0.01);
+
+    joint_trajectory.points[0].positions.resize(joint_trajectory.joint_names.size());
+    joint_trajectory.points[1].positions.resize(joint_trajectory.joint_names.size());
+    return joint_trajectory;
+}
+
+static void moveArm(double pose){
+    trajectory_msgs::JointTrajectory joint_trajectory = trajectoryHelper();
+
+    for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++) {
+		for (int indz = 0; indz < joint_states.name.size(); indz++) {
+			if (joint_trajectory.joint_names[indy] == joint_states.name[indz]) {
+				joint_trajectory.points[0].positions[indy] = joint_states.position[indz];
+				joint_trajectory.points[1].positions[indy] = joint_states.position[indz];
+				break;
+			}
+		}
+	}
+
+    joint_trajectory.points[1].positions[0] = pose;
+    joint_trajectory.points[1].time_from_start = ros::Duration(2);
+    action_method(joint_trajectory);
 }
 
 static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
@@ -436,7 +481,7 @@ static void operateGripper(bool attach, geometry_msgs::Point dest)
         // ROS_ERROR_STREAM(attach);
        
         // ROS_INFO("Inside operate Gripper");
-        ros::Duration s(1);
+        ros::Duration s(3);
         s.sleep();
          srv.request.enable = attach;
         // succeeded = 
