@@ -84,6 +84,23 @@ void jointCallback(const sensor_msgs::JointState msg)
     // fflush(stdout);
 }
 
+static geometry_msgs::TransformStamped transformHelper(std::string frame)
+{
+    geometry_msgs::TransformStamped tfStamped;
+    try
+    {
+        tfStamped = tfBuffer.lookupTransform("arm1_base_link", frame,
+                                             ros::Time(0.0), ros::Duration(1.0));
+        ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(),
+                  tfStamped.child_frame_id.c_str());
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_ERROR("%s", ex.what());
+    }
+    return tfStamped;
+}
+
 void printOrderModelPose()
 {
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
@@ -91,6 +108,23 @@ void printOrderModelPose()
     // fflush(stdout);
     for (osrf_gear::Shipment shipment : shipments)
     {
+        double agv_lin;
+        int agv_num;
+        std::string agv_camera_frame;
+        std::string agv_id = shipment.agv_id;
+        if (agv_id == "agv1")
+        {
+            agv_lin = 2.25;
+            agv_num = 1;
+            agv_camera_frame = "logical_camera_agv1_frame";
+        }
+        else
+        {
+            agv_lin = -2.25;
+            agv_num = 2;
+            agv_camera_frame = "logical_camera_agv2_frame";
+        }
+
         // ROS_INFO("HERE -1000");
         // fflush(stdout);
 
@@ -101,6 +135,9 @@ void printOrderModelPose()
             // fflush(stdout);
 
             std::string productType = product.type;
+
+            geometry_msgs::PoseStamped productDest;
+            productDest.pose = product.pose;
 
             osrf_gear::GetMaterialLocations gmlService;
             gmlService.request.material_type = productType;
@@ -142,25 +179,22 @@ void printOrderModelPose()
                         ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
 
                         std::string frame = "logical_camera_" + su.unit_id + "_frame";
-                        geometry_msgs::TransformStamped tfStamped;
-                        try
-                        {
-                            tfStamped = tfBuffer.lookupTransform("arm1_base_link", frame,
-                                                                 ros::Time(0.0), ros::Duration(1.0));
-                            ROS_DEBUG("Transform to [%s] from [%s]", tfStamped.header.frame_id.c_str(),
-                                      tfStamped.child_frame_id.c_str());
-                        }
-                        catch (tf2::TransformException &ex)
-                        {
-                            ROS_ERROR("%s", ex.what());
-                        }
-                        ROS_INFO("here 9");
+
+                        //ROS_INFO("here 9");
                         // fflush(stdout);
 
-                        geometry_msgs::PoseStamped part_pose, goal_pose;
+                        geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
                         part_pose.pose = model.pose;
 
-                        tf2::doTransform(part_pose, goal_pose, tfStamped);
+                        geometry_msgs::TransformStamped binTransform = transformHelper(frame);
+                        geometry_msgs::TransformStamped agvTransorm = transformHelper(agv_camera_frame);
+
+                        std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
+                       // ROS_INFO_STREAM(tray_frame);
+                        geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
+
+                        tf2::doTransform(part_pose, goal_pose_bin, binTransform);
+                        tf2::doTransform(productDest, goal_pose_agv, tray_tf);
 
                         // ROS_INFO("HERE 10");
                         // fflush(stdout);
@@ -168,12 +202,17 @@ void printOrderModelPose()
                         // goal_pose.pose.position.z += 0.05; // 10 cm above the part
                         //  Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
 
-                        goal_pose.pose.orientation.w = 0.707;
-                        goal_pose.pose.orientation.x = 0.0;
-                        goal_pose.pose.orientation.y = 0.707;
-                        goal_pose.pose.orientation.z = 0.0;
+                        goal_pose_bin.pose.orientation.w = 0.707;
+                        goal_pose_bin.pose.orientation.x = 0.0;
+                        goal_pose_bin.pose.orientation.y = 0.707;
+                        goal_pose_bin.pose.orientation.z = 0.0;
 
-                        geometry_msgs::Point goalPoint = goal_pose.pose.position;
+                        goal_pose_agv.pose.orientation.w = 0.707;
+                        goal_pose_agv.pose.orientation.x = 0.0;
+                        goal_pose_agv.pose.orientation.y = 0.707;
+                        goal_pose_agv.pose.orientation.z = 0.0;
+
+                        geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
                         geometry_msgs::Point homePoint;
                         homePoint.x = -0.4;
                         homePoint.y = 0;
@@ -202,36 +241,33 @@ void printOrderModelPose()
                         // r.sleep();
 
                         // action_method(joint_trajectory);
-                        double agv2 = 0;
-                        double agv1 = 2.1;
-                        moveArm(agv1);
-                        geometry_msgs::Point agv1Point;
-                        agv1Point.x = -0.1;
-                        agv1Point.y = 0.1;
-                        agv1Point.z = -0.1;
+                        // double agv2 = 0;
+                        // double agv1 = 2.1;
+                        moveArm(agv_lin);
+                        // geometry_msgs::Point agv1Point;
+                        // agv1Point.x = -0.1;
+                        // agv1Point.y = 0.1;
+                        // agv1Point.z = -0.1;
                         r.sleep();
-                        operateGripper(false, agv1Point);
+                        action_method(get_trajectory(goal_pose_agv.pose.position));
+                        // operateGripper(false, goal_pose_agv.pose.position);
 
                         ROS_ERROR("FAIL");
                         r.sleep();
                         operateGripper(true, goalPoint);
-
-
 
                         // action_method(home_trajectory);
                         r.sleep();
                         action_method(get_trajectory(homePoint));
                         r.sleep();
 
-                        
+                        moveArm(agv_lin);
+                        r.sleep();
 
-                        moveArm(agv1);
-                        r.sleep();
-                        
                         // goalPoint.z = goalPoint.z + 0.2;
-                        operateGripper(false, agv1Point);
+                        operateGripper(false, goal_pose_agv.pose.position);
                         r.sleep();
-                        moveArm(agv2);
+                        moveArm(agv_lin);
                         action_method(get_trajectory(homePoint));
                         r.sleep();
                     }
@@ -309,19 +345,10 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
 
     // ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
 
-    
-    
-
     // Fill out the joint trajectory header.
     // Each joint trajectory should have an non-monotonically increasing sequence number.
-    
 
-
-
-
-
-
-     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
+    for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     {
         for (int indz = 0; indz < joint_states.name.size(); indz++)
         {
@@ -380,7 +407,8 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
     return joint_trajectory;
 }
 
-static trajectory_msgs::JointTrajectory trajectoryHelper(){
+static trajectory_msgs::JointTrajectory trajectoryHelper()
+{
     trajectory_msgs::JointTrajectory joint_trajectory;
     static int count = 0;
     joint_trajectory.header.seq = count++;
@@ -412,18 +440,22 @@ static trajectory_msgs::JointTrajectory trajectoryHelper(){
     return joint_trajectory;
 }
 
-static void moveArm(double pose){
+static void moveArm(double pose)
+{
     trajectory_msgs::JointTrajectory joint_trajectory = trajectoryHelper();
 
-    for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++) {
-		for (int indz = 0; indz < joint_states.name.size(); indz++) {
-			if (joint_trajectory.joint_names[indy] == joint_states.name[indz]) {
-				joint_trajectory.points[0].positions[indy] = joint_states.position[indz];
-				joint_trajectory.points[1].positions[indy] = joint_states.position[indz];
-				break;
-			}
-		}
-	}
+    for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
+    {
+        for (int indz = 0; indz < joint_states.name.size(); indz++)
+        {
+            if (joint_trajectory.joint_names[indy] == joint_states.name[indz])
+            {
+                joint_trajectory.points[0].positions[indy] = joint_states.position[indz];
+                joint_trajectory.points[1].positions[indy] = joint_states.position[indz];
+                break;
+            }
+        }
+    }
 
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(2);
@@ -477,24 +509,24 @@ static void operateGripper(bool attach, geometry_msgs::Point dest)
     //         break;
     //     }
     //     i++;
-        // ROS_ERROR_STREAM(gripper_state.attached);
-        // ROS_ERROR_STREAM(attach);
-       
-        // ROS_INFO("Inside operate Gripper");
-        ros::Duration s(3);
-        s.sleep();
-         srv.request.enable = attach;
-        // succeeded = 
-        gripper_client.call(srv);
-        s.sleep();
+    // ROS_ERROR_STREAM(gripper_state.attached);
+    // ROS_ERROR_STREAM(attach);
 
-        copy.z = copy.z + 0.1;
-        action_method(get_trajectory(copy));
-        // s.sleep();
-        
-        // s.sleep();
-        // copy.z = dest.z + 0.1;
-        // action_method(get_trajectory(copy));
+    // ROS_INFO("Inside operate Gripper");
+    ros::Duration s(3);
+    s.sleep();
+    srv.request.enable = attach;
+    // succeeded =
+    gripper_client.call(srv);
+    s.sleep();
+
+    copy.z = copy.z + 0.1;
+    action_method(get_trajectory(copy));
+    // s.sleep();
+
+    // s.sleep();
+    // copy.z = dest.z + 0.1;
+    // action_method(get_trajectory(copy));
     // }
     ROS_WARN("Left loop gripper");
 }
