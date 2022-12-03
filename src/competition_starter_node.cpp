@@ -218,18 +218,13 @@ void printOrderModelPose()
                         homePoint.y = 0;
                         homePoint.z = 0.2;
 
-                        trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(goalPoint);
+                       // trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(goalPoint);
                         // trajectory_msgs::JointTrajectory home_trajectory = get_trajectory(homePoint);
                         //  get_trajectory(&home_trajectory, homePoint);
 
                         ROS_INFO("PAIN");
                         // fflush(stdout);
-                        if (joint_trajectory.header.frame_id == "empty")
-                        {
-                            ROS_INFO("CONTINUED");
-                            // fflush(stdout);
-                            continue;
-                        }
+                        
                         // ROS_INFO("PAIN");
                         //  fflush(stdout);
 
@@ -464,6 +459,13 @@ static void moveArm(double pose)
 
 static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
 {
+
+    if (joint_trajectory.header.frame_id == "empty")
+                        {
+                            ROS_INFO("Breaked");
+                            // fflush(stdout);
+                            return;
+                        }
     // Create the structure to populate for running the Action Server.
     control_msgs::FollowJointTrajectoryAction joint_trajectory_as;
     // It is possible to reuse the JointTrajectory from above
