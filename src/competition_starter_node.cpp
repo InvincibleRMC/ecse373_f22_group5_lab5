@@ -8,6 +8,7 @@
 #include "osrf_gear/StorageUnit.h"
 #include "osrf_gear/VacuumGripperControl.h"
 #include "osrf_gear/VacuumGripperState.h"
+#include "osrf_gear/AGVControl.h"
 #include <string>
 #include "geometry_msgs/Pose.h"
 #include "std_msgs/String.h"
@@ -50,8 +51,30 @@ osrf_gear::VacuumGripperState gripper_state;
 // Phase 2
 static trajectory_msgs::JointTrajectory trajectoryHelper();
 static void moveArm(double pose);
-
 static void operateGripper(bool attach, geometry_msgs::Point dest);
+ros::ServiceClient agv1_client;
+ros::ServiceClient agv2_client;
+
+void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
+{
+    ROS_WARN_STREAM(agv.request.shipment_type);
+     if (agvnum == 1) {
+      if (!agv1_client.call(agv)) {
+        ROS_ERROR("AGV1 client could not be called");
+      } else if (!agv.response.success) {
+        ROS_ERROR("Submission from AGV1 unsuccessful with message: %s",
+                  agv.response.message.c_str());
+      }
+    } else {
+      if (!agv2_client.call(agv)) {
+        ROS_ERROR("AGV2 client could not be called");
+      } else if (!agv.response.success) {
+        ROS_ERROR("Submission from AGV2 unsuccessful with message: %s",
+                  agv.response.message.c_str());
+      }
+    }
+
+}
 
 void orderCallback(const osrf_gear::Order msg)
 {
@@ -66,21 +89,22 @@ void jointCallback(const sensor_msgs::JointState msg)
     // fflush(stdout);
 
     joint_states = msg;
-    ROS_INFO("Here 100");
+    joint_states.header.frame_id = "not_empty";
+    // ROS_INFO("Here 100");
     // fflush(stdout);
 
     std::string str;
     // std::string str2 = "hi";
-    ROS_INFO("Here 100");
+    // ROS_INFO("Here 100");
     // fflush(stdout);
     for (std::string s : joint_states.name)
     {
         str = str + " " + s + " ";
-        ROS_INFO("Here 101");
+        // ROS_INFO("Here 101");
         // fflush(stdout);
     }
     ROS_INFO_STREAM_THROTTLE(10, str);
-    ROS_INFO("Here 102");
+    // ROS_INFO("Here 102");
     // fflush(stdout);
 }
 
@@ -112,17 +136,25 @@ void printOrderModelPose()
         int agv_num;
         std::string agv_camera_frame;
         std::string agv_id = shipment.agv_id;
+
+        double y_modify;
+        double side;
+
         if (agv_id == "agv1")
         {
             agv_lin = 2.25;
             agv_num = 1;
             agv_camera_frame = "logical_camera_agv1_frame";
+            side = -0.2;
+            y_modify = -0.3;
         }
         else
         {
             agv_lin = -2.25;
             agv_num = 2;
             agv_camera_frame = "logical_camera_agv2_frame";
+            side = 0.2;
+            y_modify = 0.3;
         }
 
         // ROS_INFO("HERE -1000");
@@ -180,17 +212,17 @@ void printOrderModelPose()
 
                         std::string frame = "logical_camera_" + su.unit_id + "_frame";
 
-                        //ROS_INFO("here 9");
-                        // fflush(stdout);
+                        // ROS_INFO("here 9");
+                        //  fflush(stdout);
 
                         geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
                         part_pose.pose = model.pose;
 
                         geometry_msgs::TransformStamped binTransform = transformHelper(frame);
-                        geometry_msgs::TransformStamped agvTransorm = transformHelper(agv_camera_frame);
+                        // geometry_msgs::TransformStamped agvTransorm = transformHelper(agv_camera_frame);
 
                         std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
-                       // ROS_INFO_STREAM(tray_frame);
+                        // ROS_INFO_STREAM(tray_frame);
                         geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
 
                         tf2::doTransform(part_pose, goal_pose_bin, binTransform);
@@ -202,6 +234,16 @@ void printOrderModelPose()
                         // goal_pose.pose.position.z += 0.05; // 10 cm above the part
                         //  Tell the end effector to rotate 90 degrees around the y-axis (in quaternions...).
 
+                        // double side;
+                        // if (goal_pose_agv.pose.position.y > goal_pose_bin.pose.position.y)
+                        // {
+                        //     side = -.2;
+                        // }
+                        // else
+                        // {
+                        //     side = .2;
+                        // }
+
                         goal_pose_bin.pose.orientation.w = 0.707;
                         goal_pose_bin.pose.orientation.x = 0.0;
                         goal_pose_bin.pose.orientation.y = 0.707;
@@ -212,19 +254,24 @@ void printOrderModelPose()
                         goal_pose_agv.pose.orientation.y = 0.707;
                         goal_pose_agv.pose.orientation.z = 0.0;
 
+                        goal_pose_agv.pose.position.x += side;
+                        goal_pose_agv.pose.position.y += y_modify;
+                        goal_pose_agv.pose.position.z += 0.3;
+
                         geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
+                        geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
                         geometry_msgs::Point homePoint;
                         homePoint.x = -0.4;
                         homePoint.y = 0;
                         homePoint.z = 0.2;
 
-                       // trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(goalPoint);
+                        // trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(goalPoint);
                         // trajectory_msgs::JointTrajectory home_trajectory = get_trajectory(homePoint);
                         //  get_trajectory(&home_trajectory, homePoint);
 
                         ROS_INFO("PAIN");
                         // fflush(stdout);
-                        
+
                         // ROS_INFO("PAIN");
                         //  fflush(stdout);
 
@@ -238,12 +285,18 @@ void printOrderModelPose()
                         // action_method(joint_trajectory);
                         // double agv2 = 0;
                         // double agv1 = 2.1;
+
+                        osrf_gear::AGVControl submit;
+                        submit.request.shipment_type = shipment.shipment_type;
+                        sendOutAGV(submit, agv_num);
+                        r.sleep();
                         moveArm(agv_lin);
                         // geometry_msgs::Point agv1Point;
                         // agv1Point.x = -0.1;
                         // agv1Point.y = 0.1;
                         // agv1Point.z = -0.1;
                         r.sleep();
+                        ROS_ERROR("Starting arm move");
                         action_method(get_trajectory(goal_pose_agv.pose.position));
                         // operateGripper(false, goal_pose_agv.pose.position);
 
@@ -317,8 +370,8 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
 
     if (joint_states.header.frame_id == "uninitialized")
     {
-        // ROS_INFO("HERE 12.75");
-        // fflush(stdout);
+        ROS_INFO("Header not initializd");
+
         joint_trajectory.header.frame_id = "empty";
         // ROS_INFO("HERE 12.8");
         // fflush(stdout);
@@ -363,6 +416,7 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
 
     if (num_sols == 0)
     {
+        ROS_WARN("INVS SOLs: %d", num_sols);
         joint_trajectory.header.frame_id = "empty";
         return joint_trajectory;
     }
@@ -461,11 +515,11 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
 {
 
     if (joint_trajectory.header.frame_id == "empty")
-                        {
-                            ROS_INFO("Breaked");
-                            // fflush(stdout);
-                            return;
-                        }
+    {
+        ROS_INFO("Breaked");
+        // fflush(stdout);
+        return;
+    }
     // Create the structure to populate for running the Action Server.
     control_msgs::FollowJointTrajectoryAction joint_trajectory_as;
     // It is possible to reuse the JointTrajectory from above
@@ -551,6 +605,8 @@ int main(int argc, char *argv[])
         new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("/ariac/arm1/arm/follow_joint_trajectory/", true);
 
     // Instantiate the Action Server client
+     agv1_client = n.serviceClient<osrf_gear::AGVControl>("/ariac/agv1");
+     agv2_client = n.serviceClient<osrf_gear::AGVControl>("/ariac/agv2");
 
     gripper_client = n.serviceClient<osrf_gear::VacuumGripperControl>("/ariac/arm1/gripper/control");
     ros::Subscriber gripper_state_sub = n.subscribe("/ariac/arm1/gripper/state", 1000, gripperStateCallback);
