@@ -137,10 +137,10 @@ static geometry_msgs::TransformStamped transformHelper(std::string frame)
 void printOrderModelPose()
 {
 
-    if(joint_states.header.frame_id == "uninitialized"){
+    if (joint_states.header.frame_id == "uninitialized")
+    {
         return;
     }
-    
 
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
     // ROS_INFO("HERE -10000");
@@ -227,10 +227,11 @@ void printOrderModelPose()
                         ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
 
                         std::string frame = "logical_camera_" + su.unit_id + "_frame";
-                        
+
                         ROS_ERROR("Starting arm move");
-                        
-                        //r.sleep();
+
+                        // r.sleep();
+                        moveArm(agv_lin);
 
                         geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
                         part_pose.pose = model.pose;
@@ -286,11 +287,13 @@ void printOrderModelPose()
                         // agv1Point.y = 0.1;
                         // agv1Point.z = -0.1;
                         // r.sleep();
-                        //moveArm(0);
-                        operateGripper(true, goal_pose_bin.pose.position, 0);
+                        // moveArm(0);
+                        operateGripper(false, goal_pose_agv.pose.position, agv_lin);
                         ROS_ERROR("Dropping Tray");
-                        
-                        operateGripper(false, goal_pose_agv.pose.position,agv_lin);
+
+                        double camY = 0;
+                        moveArm(camY);
+                        operateGripper(true, goal_pose_bin.pose.position, camY);
                         // operateGripper(false, goal_pose_agv.pose.position);
 
                         ROS_ERROR("FAIL");
@@ -306,7 +309,7 @@ void printOrderModelPose()
                         // r.sleep();
 
                         // goalPoint.z = goalPoint.z + 0.2;
-                        
+
                         // r.sleep();
                         // // moveArm(agv_lin);
                         // action_method(get_trajectory(homePoint));
@@ -485,8 +488,9 @@ static trajectory_msgs::JointTrajectory trajectoryHelper()
     return joint_trajectory;
 }
 
-static void moveArmAndGripper(double pose, geometry_msgs::Point dest){
-     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(dest);
+static void moveArmAndGripper(double pose, geometry_msgs::Point dest)
+{
+    trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(dest);
 
     //  for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     // {
@@ -504,15 +508,16 @@ static void moveArmAndGripper(double pose, geometry_msgs::Point dest){
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
     action_method(joint_trajectory);
-    ros::Duration(5.0).sleep();
+    // ros::Duration(5.0).sleep();
 }
-
-
 
 static void moveArm(double pose)
 {
-    trajectory_msgs::JointTrajectory joint_trajectory = trajectoryHelper();
-
+    geometry_msgs::Point homePoint;
+    homePoint.x = -0.4;
+    homePoint.y = 0;
+    homePoint.z = 0.2;
+    trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(homePoint);
     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     {
         for (int indz = 0; indz < joint_states.name.size(); indz++)
@@ -525,11 +530,9 @@ static void moveArm(double pose)
             }
         }
     }
-
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
     action_method(joint_trajectory);
-    
 }
 
 static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
@@ -565,7 +568,7 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
     ros::Duration(5.0).sleep();
 }
 
-static void operateGripper(bool attach, geometry_msgs::Point dest,double pose)
+static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
 {
 
     osrf_gear::VacuumGripperControl srv;
@@ -573,12 +576,12 @@ static void operateGripper(bool attach, geometry_msgs::Point dest,double pose)
 
     // bool succeeded = false;
 
-    //copy.z = dest.z;
-    //  if (!attach)
-    //     {
-    //         copy.z = dest.z + 0.3;
-    //     }
-    // action_method(get_trajectory(copy));
+    // copy.z = dest.z;
+    //   if (!attach)
+    //      {
+    //          copy.z = dest.z + 0.3;
+    //      }
+    //  action_method(get_trajectory(copy));
 
     moveArmAndGripper(pose, dest);
     ROS_INFO(attach ? "Picking Up" : "Dropping");
