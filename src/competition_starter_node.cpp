@@ -236,26 +236,21 @@ void printOrderModelPose()
                         geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
                         part_pose.pose = model.pose;
 
-                        geometry_msgs::TransformStamped binTransform = transformHelper(frame);
+                       
                         // geometry_msgs::TransformStamped agvTransorm = transformHelper(agv_camera_frame);
 
                         std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
                         geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
-
-                        tf2::doTransform(part_pose, goal_pose_bin, binTransform);
                         tf2::doTransform(productDest, goal_pose_agv, tray_tf);
 
-                        goal_pose_bin.pose.orientation.w = 0.707;
-                        goal_pose_bin.pose.orientation.x = 0.0;
-                        goal_pose_bin.pose.orientation.y = 0.707;
-                        goal_pose_bin.pose.orientation.z = 0.0;
+                        
 
                         goal_pose_agv.pose.orientation.w = 0.707;
                         goal_pose_agv.pose.orientation.x = 0.0;
                         goal_pose_agv.pose.orientation.y = 0.707;
                         goal_pose_agv.pose.orientation.z = 0.0;
 
-                        goal_pose_agv.pose.position.x += side;
+                        //goal_pose_agv.pose.position.x += side;
                         goal_pose_agv.pose.position.y += y_modify;
                         goal_pose_agv.pose.position.z += 0.3;
 
@@ -291,8 +286,35 @@ void printOrderModelPose()
                         operateGripper(false, goal_pose_agv.pose.position, agv_lin);
                         ROS_ERROR("Dropping Tray");
 
-                        double camY = 0;
+                        // move home
+                        action_method(get_trajectory(homePoint));
+                        
+                        //tf2::doTransform(part_pose, goal_pose_bin, binTransform);
+
+                        double camY = goal_pose_bin.pose.position.y;
+                        if(su.unit_id == "bin4"){
+                            ROS_WARN_STREAM(su.unit_id);
+                            camY = 0.2;
+                        } else if(su.unit_id == "bin5"){
+                            ROS_WARN_STREAM(su.unit_id);
+                            camY = 0.8;
+                        }
+                        else if(su.unit_id == "bin6"){
+                            ROS_WARN_STREAM(su.unit_id);
+                            camY = 1.0;
+                        } else{
+                            ROS_ERROR("WRONG BING");
+                        }
                         moveArm(camY);
+                        
+                        geometry_msgs::TransformStamped binTransform = transformHelper(frame);
+                        tf2::doTransform(part_pose, goal_pose_bin, binTransform);
+
+                        goal_pose_bin.pose.orientation.w = 0.707;
+                        goal_pose_bin.pose.orientation.x = 0.0;
+                        goal_pose_bin.pose.orientation.y = 0.707;
+                        goal_pose_bin.pose.orientation.z = 0.0;
+
                         operateGripper(true, goal_pose_bin.pose.position, camY);
                         // operateGripper(false, goal_pose_agv.pose.position);
 
