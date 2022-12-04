@@ -220,7 +220,10 @@ void printOrderModelPose()
 
                     if (productType == model.type)
                     {
-                        ros::Duration r(5);
+
+                        geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
+                        part_pose.pose = model.pose;
+                        //ros::Duration r(5);
                         // ROS_INFO("HERE- 1");
                         // fflush(stdout);
                         geometry_msgs::Point point = model.pose.position;
@@ -228,22 +231,41 @@ void printOrderModelPose()
 
                         std::string frame = "logical_camera_" + su.unit_id + "_frame";
 
-                        ROS_ERROR("Starting arm move");
+                        double camY;
+                        if (su.unit_id == "bin4")
+                        {
+                            ROS_WARN_STREAM(su.unit_id);
+                            camY = 0;
+                        }
+                        else if (su.unit_id == "bin5")
+                        {
+                            ROS_WARN_STREAM(su.unit_id);
+                            camY = 1;
+                        }
+                        else if(su.unit_id == "bin6"){
+                            ROS_WARN_STREAM(su.unit_id);
+                            camY = 1.8;
+                        } else{
+                            ROS_ERROR("WRONG BING");
+                        }
+                        moveArm(camY);
+                        
+                        geometry_msgs::TransformStamped binTransform = transformHelper(frame);
+                        tf2::doTransform(part_pose, goal_pose_bin, binTransform);
 
-                        // r.sleep();
+                        goal_pose_bin.pose.orientation.w = 0.707;
+                        goal_pose_bin.pose.orientation.x = 0.0;
+                        goal_pose_bin.pose.orientation.y = 0.707;
+                        goal_pose_bin.pose.orientation.z = 0.0;
+
+                        operateGripper(true, goal_pose_bin.pose.position, camY);
+             
                         moveArm(agv_lin);
 
-                        geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
-                        part_pose.pose = model.pose;
-
-                       
-                        // geometry_msgs::TransformStamped agvTransorm = transformHelper(agv_camera_frame);
-
+    
                         std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
                         geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
                         tf2::doTransform(productDest, goal_pose_agv, tray_tf);
-
-                        
 
                         goal_pose_agv.pose.orientation.w = 0.707;
                         goal_pose_agv.pose.orientation.x = 0.0;
@@ -261,81 +283,12 @@ void printOrderModelPose()
                         homePoint.y = 0;
                         homePoint.z = 0.2;
 
-                        // ROS_INFO("PAIN");
-                        // fflush(stdout);
-
-                        // ROS_INFO("PAIN");
-                        //  fflush(stdout);
-
-                        // trajectoryPub.publish(joint_trajectory);
-                        // r.sleep();
-
-                        // trajectoryPub.publish(home_trajectory);
-                        // r.sleep();
-
-                        // action_method(joint_trajectory);
-                        // double agv2 = 0;
-                        // double agv1 = 2.1;
-
-                        // geometry_msgs::Point agv1Point;
-                        // agv1Point.x = -0.1;
-                        // agv1Point.y = 0.1;
-                        // agv1Point.z = -0.1;
-                        // r.sleep();
-                        // moveArm(0);
+                
                         operateGripper(false, goal_pose_agv.pose.position, agv_lin);
                         ROS_ERROR("Dropping Tray");
 
                         // move home
                         action_method(get_trajectory(homePoint));
-                        
-                        //tf2::doTransform(part_pose, goal_pose_bin, binTransform);
-
-                        double camY = goal_pose_bin.pose.position.y;
-                        if(su.unit_id == "bin4"){
-                            ROS_WARN_STREAM(su.unit_id);
-                            camY = 0.2;
-                        } else if(su.unit_id == "bin5"){
-                            ROS_WARN_STREAM(su.unit_id);
-                            camY = 0.8;
-                        }
-                        else if(su.unit_id == "bin6"){
-                            ROS_WARN_STREAM(su.unit_id);
-                            camY = 1.0;
-                        } else{
-                            ROS_ERROR("WRONG BING");
-                        }
-                        moveArm(camY);
-                        
-                        geometry_msgs::TransformStamped binTransform = transformHelper(frame);
-                        tf2::doTransform(part_pose, goal_pose_bin, binTransform);
-
-                        goal_pose_bin.pose.orientation.w = 0.707;
-                        goal_pose_bin.pose.orientation.x = 0.0;
-                        goal_pose_bin.pose.orientation.y = 0.707;
-                        goal_pose_bin.pose.orientation.z = 0.0;
-
-                        operateGripper(true, goal_pose_bin.pose.position, camY);
-                        // operateGripper(false, goal_pose_agv.pose.position);
-
-                        ROS_ERROR("FAIL");
-                        // r.sleep();
-                        // operateGripper(true, goalPoint);
-
-                        // action_method(home_trajectory);
-                        // r.sleep();
-                        // action_method(get_trajectory(homePoint));
-                        // r.sleep();
-
-                        // moveArm(agv_lin);
-                        // r.sleep();
-
-                        // goalPoint.z = goalPoint.z + 0.2;
-
-                        // r.sleep();
-                        // // moveArm(agv_lin);
-                        // action_method(get_trajectory(homePoint));
-                        // r.sleep();
                     }
                 }
             }
