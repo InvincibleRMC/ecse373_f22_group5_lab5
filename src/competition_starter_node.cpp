@@ -26,7 +26,8 @@
 std::vector<osrf_gear::Order> order_vector;
 sensor_msgs::JointState joint_states;
 ros::ServiceClient materialLocations;
-std::vector<std::vector<osrf_gear::Model>> camera_data = std::vector<std::vector<osrf_gear::Model>>(10);
+
+std::vector<osrf_gear::LogicalCameraImage> camera_Logical_Images = std::vector<osrf_gear::LogicalCameraImage>(10);
 ros::ServiceClient gml;
 tf2_ros::Buffer tfBuffer;
 
@@ -45,7 +46,6 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory);
 
 // Phase 1
 ros::ServiceClient gripper_client;
-// osrf_gear::VacuumGripperControl gripper_control_srv;
 osrf_gear::VacuumGripperState gripper_state;
 
 // Phase 2
@@ -58,30 +58,14 @@ static void moveArmAndGripper(double pose, geometry_msgs::Point dest);
 
 void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 {
-    // ROS_WARN_STREAM(agv.request.shipment_type);
+
     if (agvnum == 1)
     {
-        if (!agv1_client.call(agv))
-        {
-            // ROS_ERROR("AGV1 client could not be called");
-        }
-        else if (!agv.response.success)
-        {
-            // ROS_ERROR("Submission from AGV1 unsuccessful with message: %s",
-            //           agv.response.message.c_str());
-        }
+        agv1_client.call(agv);
     }
     else
     {
-        if (!agv2_client.call(agv))
-        {
-            // ROS_ERROR("AGV2 client could not be called");
-        }
-        else if (!agv.response.success)
-        {
-            // ROS_ERROR("Submission from AGV2 unsuccessful with message: %s",
-            //           agv.response.message.c_str());
-        }
+        agv2_client.call(agv);
     }
 }
 
@@ -94,7 +78,7 @@ void orderCallback(const osrf_gear::Order msg)
 
 void jointCallback(const sensor_msgs::JointState msg)
 {
-    ROS_INFO("Starting Joint callback");
+    ROS_INFO_THROTTLE(10, "Starting Joint callback");
     // fflush(stdout);
 
     joint_states = msg;
@@ -128,13 +112,18 @@ static geometry_msgs::TransformStamped transformHelper(std::string frame)
 
 void printOrderModelPose()
 {
-
+    ROS_INFO_THROTTLE(10, "Handling Arm");
     if (joint_states.header.frame_id == "uninitialized")
+    {
+        return;
+    }
+    if (order_vector.size() == 0)
     {
         return;
     }
 
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
+    ROS_WARN("Got shipments");
     // ROS_INFO("HERE -10000");
     // fflush(stdout);
     for (osrf_gear::Shipment shipment : shipments)
@@ -145,23 +134,23 @@ void printOrderModelPose()
         std::string agv_id = shipment.agv_id;
 
         double y_modify;
-        double side;
+        // double side;
 
         if (agv_id == "agv1")
         {
             agv_lin = 2.25;
             agv_num = 1;
             agv_camera_frame = "logical_camera_agv1_frame";
-            side = 0.2;
-            y_modify = -0;
+            // side = 0.2;
+            // y_modify = -0;
         }
         else
         {
             agv_lin = -2.25;
             agv_num = 2;
             agv_camera_frame = "logical_camera_agv2_frame";
-            side = -0.2;
-            y_modify = 0;
+            // side = -0.2;
+            // y_modify = 0;
         }
 
         // ROS_INFO("HERE -1000");
@@ -184,9 +173,6 @@ void printOrderModelPose()
             gmlService.request.material_type = productType;
             gml.call(gmlService);
 
-            // ROS_INFO("HERE -800");
-            // fflush(stdout);
-
             for (osrf_gear::StorageUnit su : gmlService.response.storage_units)
             {
 
@@ -195,12 +181,14 @@ void printOrderModelPose()
                 sscanf(binName, "bin%d", &binNum);
                 binNum--;
 
-                if (camera_data.at(binNum).size() == 0)
+                ROS_INFO("Checking amount of models is greater than 0");
+                ROS_INFO_STREAM(binNum);
+                if (camera_Logical_Images.at(binNum).models.size() == 0)
                 {
                     return;
                 }
-                osrf_gear::Model model = camera_data.at(binNum).at(0);
-
+                osrf_gear::Model model = camera_Logical_Images.at(binNum).models.at(0);
+                ROS_INFO("Choose first model");
                 // for ()
                 // {
 
@@ -246,6 +234,13 @@ void printOrderModelPose()
 
                     operateGripper(true, goal_pose_bin.pose.position, camY);
 
+                    geometry_msgs::Point homePoint;
+                    homePoint.x = -0.4;
+                    homePoint.y = 0;
+                    homePoint.z = 0.2;
+
+                    action_method(get_trajectory(homePoint));
+
                     moveArm(agv_lin);
 
                     std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
@@ -259,14 +254,10 @@ void printOrderModelPose()
 
                     // goal_pose_agv.pose.position.x += side;
                     goal_pose_agv.pose.position.y += y_modify;
-                    goal_pose_agv.pose.position.z += 0.0;
+                    goal_pose_agv.pose.position.z += 0.2;
 
                     geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
                     geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
-                    geometry_msgs::Point homePoint;
-                    homePoint.x = -0.4;
-                    homePoint.y = 0;
-                    homePoint.z = -0.1;
 
                     operateGripper(false, goal_pose_agv.pose.position, agv_lin);
                     ROS_ERROR("Dropping Tray");
@@ -450,24 +441,9 @@ static trajectory_msgs::JointTrajectory trajectoryHelper()
 static void moveArmAndGripper(double pose, geometry_msgs::Point dest)
 {
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(dest);
-
-    //  for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
-    // {
-    //     for (int indz = 0; indz < joint_states.name.size(); indz++)
-    //     {
-    //         if (joint_trajectory.joint_names[indy] == joint_states.name[indz])
-    //         {
-    //             joint_trajectory.points[0].positions[indy] = joint_states.position[indz];
-    //             joint_trajectory.points[1].positions[indy] = joint_states.position[indz];
-    //             break;
-    //         }
-    //     }
-    // }
-
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
     action_method(joint_trajectory);
-    // ros::Duration(5.0).sleep();
 }
 
 static void moveArm(double pose)
@@ -475,7 +451,7 @@ static void moveArm(double pose)
     geometry_msgs::Point homePoint;
     homePoint.x = -0.4;
     homePoint.y = 0;
-    homePoint.z = -0.1;
+    homePoint.z = 0.2;
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(homePoint);
     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     {
@@ -586,6 +562,10 @@ int main(int argc, char *argv[])
     ros::init(argc, argv, "lab5");
 
     ros::NodeHandle n;
+
+    ros::AsyncSpinner spinner(boost::thread::hardware_concurrency());
+    spinner.start();
+
     tf2_ros::TransformListener tfListener(tfBuffer);
     trajectory_as =
         new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("/ariac/arm1/arm/follow_joint_trajectory/", true);
@@ -634,20 +614,8 @@ int main(int argc, char *argv[])
         std::sprintf(stringCam, "/ariac/logical_camera_bin%d", i + 1);
         binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
                                                                    {
-            for(osrf_gear::Model m : img->models){
-                camera_data.at(i).push_back(m);          
-            }
-            printOrderModelPose();
-            for(osrf_gear::Model m : img->models){
-                //ROS_INFO("Poping Camera %d", i);
-                // fflush(stdout);
-                camera_data.at(i).pop_back();
-            }
-            ROS_INFO("End of logicalcam callback");
-            fflush(stdout); });
-
-        ROS_INFO("END OF CALLBACK");
-        // fflush(stdout);
+                                                                       camera_Logical_Images.at(i) = *img;
+                                                                   });
     }
 
     for (int i = binCameras.size(); i < agvCameras.size() + binCameras.size(); i++)
@@ -657,12 +625,7 @@ int main(int argc, char *argv[])
         std::sprintf(stringCam, "/ariac/logical_camera_agv%d", num + 1);
 
         agvCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-                                                                     {
-            ROS_INFO("Starting AGV callback");
-            // fflush(stdout);
-            for(osrf_gear::Model m : img->models){
-                camera_data[i].push_back(m);          
-            } });
+                                                                     { camera_Logical_Images.at(i) = *img; });
     }
 
     for (int i = agvCameras.size() + binCameras.size(); i < agvCameras.size() + binCameras.size() + qualityCameras.size(); i++)
@@ -672,17 +635,18 @@ int main(int argc, char *argv[])
         std::sprintf(stringCam, "/ariac/quality_control_sensor_%d", num + 1);
 
         qualityCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-                                                                         {
-            ROS_INFO("Starting QC callback");
-            // fflush(stdout);
-            for(osrf_gear::Model m : img->models){
-                camera_data[i].push_back(m);          
-            } });
+                                                                         { camera_Logical_Images.at(i) = *img; });
     }
 
     ros::Subscriber jointSub = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1000, jointCallback);
 
-    ROS_INFO("Spinnging");
+    ROS_INFO("Spinning");
     // fflush(stdout);
-    ros::spin();
+    ros::Rate r(10);
+    while (ros::ok)
+    {
+        printOrderModelPose();
+        // ros::spinOnce();
+        r.sleep();
+    }
 }
