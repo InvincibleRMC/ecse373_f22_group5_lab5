@@ -99,22 +99,14 @@ void jointCallback(const sensor_msgs::JointState msg)
 
     joint_states = msg;
     joint_states.header.frame_id = "not_empty";
-    // ROS_INFO("Here 100");
-    // fflush(stdout);
 
     std::string str;
-    // std::string str2 = "hi";
-    // ROS_INFO("Here 100");
-    // fflush(stdout);
+
     for (std::string s : joint_states.name)
     {
         str = str + " " + s + " ";
-        // ROS_INFO("Here 101");
-        // fflush(stdout);
     }
     ROS_INFO_STREAM_THROTTLE(10, str);
-    // ROS_INFO("Here 102");
-    // fflush(stdout);
 }
 
 static geometry_msgs::TransformStamped transformHelper(std::string frame)
@@ -174,15 +166,17 @@ void printOrderModelPose()
 
         // ROS_INFO("HERE -1000");
         // fflush(stdout);
+        for (osrf_gear::Product product : shipment.products)
+        {
+            ROS_WARN_STREAM(product.type);
+        }
 
         for (osrf_gear::Product product : shipment.products)
         {
-
-            // ROS_INFO("HERE -900");
-            // fflush(stdout);
+            ROS_ERROR_STREAM(shipment.products.size());
 
             std::string productType = product.type;
-
+            ROS_ERROR_STREAM(productType);
             geometry_msgs::PoseStamped productDest;
             productDest.pose = product.pose;
 
@@ -196,101 +190,91 @@ void printOrderModelPose()
             for (osrf_gear::StorageUnit su : gmlService.response.storage_units)
             {
 
-                // ROS_INFO("HERE -2");
-                // fflush(stdout);
                 const char *binName = su.unit_id.c_str();
                 int binNum;
                 sscanf(binName, "bin%d", &binNum);
                 binNum--;
-                // ROS_INFO("HERE -3");
-                // fflush(stdout);
 
-                for (osrf_gear::Model model : camera_data.at(binNum))
+                if (camera_data.at(binNum).size() == 0)
                 {
-                    // ROS_INFO("HERE -5");
-                    // fflush(stdout);
-                    ROS_INFO("%s", productType.c_str());
-                    // fflush(stdout);
-                    // ROS_INFO("HERE -6");
-                    // fflush(stdout);
-                    ROS_INFO("%s", model.type.c_str());
-                    // fflush(stdout);
-                    // ROS_INFO("HERE -7)");
-                    // fflush(stdout);
-
-                    if (productType == model.type)
-                    {
-
-                        geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
-                        part_pose.pose = model.pose;
-                        //ros::Duration r(5);
-                        // ROS_INFO("HERE- 1");
-                        // fflush(stdout);
-                        geometry_msgs::Point point = model.pose.position;
-                        ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
-
-                        std::string frame = "logical_camera_" + su.unit_id + "_frame";
-
-                        double camY;
-                        if (su.unit_id == "bin4")
-                        {
-                            ROS_WARN_STREAM(su.unit_id);
-                            camY = 0;
-                        }
-                        else if (su.unit_id == "bin5")
-                        {
-                            ROS_WARN_STREAM(su.unit_id);
-                            camY = 1;
-                        }
-                        else if(su.unit_id == "bin6"){
-                            ROS_WARN_STREAM(su.unit_id);
-                            camY = 1.8;
-                        } else{
-                            ROS_ERROR("WRONG BING");
-                        }
-                        moveArm(camY);
-                        
-                        geometry_msgs::TransformStamped binTransform = transformHelper(frame);
-                        tf2::doTransform(part_pose, goal_pose_bin, binTransform);
-
-                        goal_pose_bin.pose.orientation.w = 0.707;
-                        goal_pose_bin.pose.orientation.x = 0.0;
-                        goal_pose_bin.pose.orientation.y = 0.707;
-                        goal_pose_bin.pose.orientation.z = 0.0;
-
-                        operateGripper(true, goal_pose_bin.pose.position, camY);
-             
-                        moveArm(agv_lin);
-
-    
-                        std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
-                        geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
-                        tf2::doTransform(productDest, goal_pose_agv, tray_tf);
-
-                        goal_pose_agv.pose.orientation.w = 0.707;
-                        goal_pose_agv.pose.orientation.x = 0.0;
-                        goal_pose_agv.pose.orientation.y = 0.707;
-                        goal_pose_agv.pose.orientation.z = 0.0;
-
-                        //goal_pose_agv.pose.position.x += side;
-                        goal_pose_agv.pose.position.y += y_modify;
-                        goal_pose_agv.pose.position.z += 0.3;
-
-                        geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
-                        geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
-                        geometry_msgs::Point homePoint;
-                        homePoint.x = -0.4;
-                        homePoint.y = 0;
-                        homePoint.z = 0.2;
-
-                
-                        operateGripper(false, goal_pose_agv.pose.position, agv_lin);
-                        ROS_ERROR("Dropping Tray");
-
-                        // move home
-                        action_method(get_trajectory(homePoint));
-                    }
+                    return;
                 }
+                osrf_gear::Model model = camera_data.at(binNum).at(0);
+
+                // for ()
+                // {
+
+                if (productType == model.type)
+                {
+
+                    geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
+                    part_pose.pose = model.pose;
+                    geometry_msgs::Point point = model.pose.position;
+                    ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
+
+                    std::string frame = "logical_camera_" + su.unit_id + "_frame";
+
+                    double camY;
+                    if (su.unit_id == "bin4")
+                    {
+                        ROS_WARN_STREAM(su.unit_id);
+                        camY = 0;
+                    }
+                    else if (su.unit_id == "bin5")
+                    {
+                        ROS_WARN_STREAM(su.unit_id);
+                        camY = 1;
+                    }
+                    else if (su.unit_id == "bin6")
+                    {
+                        ROS_WARN_STREAM(su.unit_id);
+                        camY = 1.8;
+                    }
+                    else
+                    {
+                        ROS_ERROR("WRONG BIN");
+                    }
+                    moveArm(camY);
+
+                    geometry_msgs::TransformStamped binTransform = transformHelper(frame);
+                    tf2::doTransform(part_pose, goal_pose_bin, binTransform);
+
+                    goal_pose_bin.pose.orientation.w = 0.707;
+                    goal_pose_bin.pose.orientation.x = 0.0;
+                    goal_pose_bin.pose.orientation.y = 0.707;
+                    goal_pose_bin.pose.orientation.z = 0.0;
+
+                    operateGripper(true, goal_pose_bin.pose.position, camY);
+
+                    moveArm(agv_lin);
+
+                    std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
+                    geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
+                    tf2::doTransform(productDest, goal_pose_agv, tray_tf);
+
+                    goal_pose_agv.pose.orientation.w = 0.707;
+                    goal_pose_agv.pose.orientation.x = 0.0;
+                    goal_pose_agv.pose.orientation.y = 0.707;
+                    goal_pose_agv.pose.orientation.z = 0.0;
+
+                    // goal_pose_agv.pose.position.x += side;
+                    goal_pose_agv.pose.position.y += y_modify;
+                    goal_pose_agv.pose.position.z += 0.0;
+
+                    geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
+                    geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
+                    geometry_msgs::Point homePoint;
+                    homePoint.x = -0.4;
+                    homePoint.y = 0;
+                    homePoint.z = -0.1;
+
+                    operateGripper(false, goal_pose_agv.pose.position, agv_lin);
+                    ROS_ERROR("Dropping Tray");
+
+                    // move home
+                    action_method(get_trajectory(homePoint));
+                }
+                // }
             }
         }
         osrf_gear::AGVControl submit;
@@ -491,7 +475,7 @@ static void moveArm(double pose)
     geometry_msgs::Point homePoint;
     homePoint.x = -0.4;
     homePoint.y = 0;
-    homePoint.z = 0.2;
+    homePoint.z = -0.1;
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(homePoint);
     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     {
@@ -655,7 +639,7 @@ int main(int argc, char *argv[])
             }
             printOrderModelPose();
             for(osrf_gear::Model m : img->models){
-                ROS_INFO("Poping Camera %d", i);
+                //ROS_INFO("Poping Camera %d", i);
                 // fflush(stdout);
                 camera_data.at(i).pop_back();
             }
