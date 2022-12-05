@@ -39,10 +39,8 @@ ros::Publisher trajectoryPub;
 double T_pose[4][4], T_des[4][4];
 double q_pose[6], q_des[8][6];
 
-// trajectory_msgs::JointTrajectory desired;
-
 static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest);
-static void action_method(trajectory_msgs::JointTrajectory joint_trajectory);
+static void action_method(trajectory_msgs::JointTrajectory joint_trajectory,double duration);
 
 // Phase 1
 ros::ServiceClient gripper_client;
@@ -55,6 +53,7 @@ static void operateGripper(bool attach, geometry_msgs::Point dest, double pose);
 ros::ServiceClient agv1_client;
 ros::ServiceClient agv2_client;
 static void moveArmAndGripper(double pose, geometry_msgs::Point dest);
+static const double THROTTLE = 30;
 
 void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 {
@@ -71,14 +70,14 @@ void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 
 void orderCallback(const osrf_gear::Order msg)
 {
-    ROS_INFO("Starting Order callback");
+    ROS_ERROR("Starsting Order callback");
     // fflush(stdout);
     order_vector.push_back(msg);
 }
 
 void jointCallback(const sensor_msgs::JointState msg)
 {
-    ROS_INFO_THROTTLE(10, "Starting Joint callback");
+    ROS_INFO_THROTTLE(THROTTLE, "Starting Joint callback");
     // fflush(stdout);
 
     joint_states = msg;
@@ -90,7 +89,7 @@ void jointCallback(const sensor_msgs::JointState msg)
     {
         str = str + " " + s + " ";
     }
-    ROS_INFO_STREAM_THROTTLE(10, str);
+    ROS_INFO_STREAM_THROTTLE(THROTTLE, str);
 }
 
 static geometry_msgs::TransformStamped transformHelper(std::string frame)
@@ -112,7 +111,7 @@ static geometry_msgs::TransformStamped transformHelper(std::string frame)
 
 void printOrderModelPose()
 {
-    ROS_INFO_THROTTLE(10, "Handling Arm");
+    ROS_INFO("Handling Arm");
     if (joint_states.header.frame_id == "uninitialized")
     {
         return;
@@ -123,9 +122,8 @@ void printOrderModelPose()
     }
 
     std::vector<osrf_gear::Shipment> shipments = order_vector.front().shipments;
-    ROS_WARN("Got shipments");
-    // ROS_INFO("HERE -10000");
-    // fflush(stdout);
+    ROS_WARN_STREAM("Got shipments amount" + std::to_string(shipments.size()));
+    
     for (osrf_gear::Shipment shipment : shipments)
     {
         double agv_lin;
@@ -138,11 +136,11 @@ void printOrderModelPose()
 
         if (agv_id == "agv1")
         {
-            agv_lin = 2.25;
+            agv_lin = 2;
             agv_num = 1;
             agv_camera_frame = "logical_camera_agv1_frame";
             // side = 0.2;
-            // y_modify = -0;
+            y_modify = -0.2;
         }
         else
         {
@@ -150,45 +148,41 @@ void printOrderModelPose()
             agv_num = 2;
             agv_camera_frame = "logical_camera_agv2_frame";
             // side = -0.2;
-            // y_modify = 0;
-        }
-
-        // ROS_INFO("HERE -1000");
-        // fflush(stdout);
-        for (osrf_gear::Product product : shipment.products)
-        {
-            ROS_WARN_STREAM(product.type);
+            y_modify = 0.2;
         }
 
         for (osrf_gear::Product product : shipment.products)
         {
-            ROS_ERROR_STREAM(shipment.products.size());
+            // ROS_ERROR_STREAM(shipment.products.size());
 
             std::string productType = product.type;
-            ROS_ERROR_STREAM(productType);
+            // ROS_ERROR_STREAM(productType);
             geometry_msgs::PoseStamped productDest;
             productDest.pose = product.pose;
 
             osrf_gear::GetMaterialLocations gmlService;
             gmlService.request.material_type = productType;
             gml.call(gmlService);
-
+            //ROS_WARN_STREAM(gmlService.response.storage_units.size());
             for (osrf_gear::StorageUnit su : gmlService.response.storage_units)
             {
-
+                //ROS_WARN_STREAM(su.unit_id);
+                if (su.unit_id == "belt")
+                {
+                    continue;
+                }
                 const char *binName = su.unit_id.c_str();
                 int binNum;
                 sscanf(binName, "bin%d", &binNum);
                 binNum--;
 
-                ROS_INFO("Checking amount of models is greater than 0");
-                ROS_INFO_STREAM(binNum);
+               
                 if (camera_Logical_Images.at(binNum).models.size() == 0)
                 {
                     return;
                 }
                 osrf_gear::Model model = camera_Logical_Images.at(binNum).models.at(0);
-                ROS_INFO("Choose first model");
+                
                 // for ()
                 // {
 
@@ -201,7 +195,7 @@ void printOrderModelPose()
                     ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
 
                     std::string frame = "logical_camera_" + su.unit_id + "_frame";
-
+                    const double centerY = 0.2;
                     double camY;
                     if (su.unit_id == "bin4")
                     {
@@ -216,7 +210,7 @@ void printOrderModelPose()
                     else if (su.unit_id == "bin6")
                     {
                         ROS_WARN_STREAM(su.unit_id);
-                        camY = 1.8;
+                        camY = 2.1;
                     }
                     else
                     {
@@ -231,15 +225,12 @@ void printOrderModelPose()
                     goal_pose_bin.pose.orientation.x = 0.0;
                     goal_pose_bin.pose.orientation.y = 0.707;
                     goal_pose_bin.pose.orientation.z = 0.0;
+                    // goal_pose_bin.pose.position.z += 0.05;
 
                     operateGripper(true, goal_pose_bin.pose.position, camY);
 
-                    geometry_msgs::Point homePoint;
-                    homePoint.x = -0.4;
-                    homePoint.y = 0;
-                    homePoint.z = 0.2;
 
-                    action_method(get_trajectory(homePoint));
+                    moveArm(centerY);
 
                     moveArm(agv_lin);
 
@@ -254,16 +245,16 @@ void printOrderModelPose()
 
                     // goal_pose_agv.pose.position.x += side;
                     goal_pose_agv.pose.position.y += y_modify;
-                    goal_pose_agv.pose.position.z += 0.2;
+                    goal_pose_agv.pose.position.z += 0.25;
 
-                    geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
-                    geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
+                    // geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
+                    // geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
 
                     operateGripper(false, goal_pose_agv.pose.position, agv_lin);
-                    ROS_ERROR("Dropping Tray");
+                    // ROS_ERROR("Dropping Tray");
 
                     // move home
-                    action_method(get_trajectory(homePoint));
+                    moveArm(centerY);
                 }
                 // }
             }
@@ -271,9 +262,13 @@ void printOrderModelPose()
         osrf_gear::AGVControl submit;
         submit.request.shipment_type = shipment.shipment_type;
         sendOutAGV(submit, agv_num);
+        ros::Duration(7.5).sleep();
+        ROS_WARN("Completed Shipment");
     }
-    ROS_INFO("Finished print");
-    // fflush(stdout);
+    ROS_ERROR("Completed Order");
+    ROS_ERROR_STREAM(order_vector.size());
+    //order_vector.erase(order_vector.begin());
+    ROS_ERROR_STREAM(order_vector.size());
 }
 
 static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest)
@@ -284,25 +279,14 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
     double y = dest.y;
     double z = dest.z;
 
-    ROS_INFO("x: %lf, y:%lf, z:%lf", x, y, z);
-
-    ROS_INFO("LAB 6 stuff");
     T_des[0][3] = x;
-    // ROS_INFO("HERE 0.1");
-    // fflush(stdout);
+   
     T_des[1][3] = y;
-    // ROS_INFO("HERE 0.2");
-    // fflush(stdout);
+   
     T_des[2][3] = z;
-    // ROS_INFO("HERE 0.3");
-    // fflush(stdout);
+    
     T_des[3][3] = 1;
-    // // ROS_INFO("HERE 0.4");
-    // fflush(stdout);
-
-    // ROS_INFO("HERE 1");
-    // fflush(stdout);
-
+   
     // The orientation of the end effector so that the end effector is down.
     T_des[0][0] = 0.0;
     T_des[0][1] = -1.0;
@@ -316,22 +300,6 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
     T_des[3][0] = 0.0;
     T_des[3][1] = 0.0;
     T_des[3][2] = 0.0;
-
-    // if (joint_states.header.frame_id == "uninitialized")
-    // {
-    //     ROS_INFO("Header not initializd");
-
-    //    // joint_trajectory.header.frame_id = "empty";
-    //     // ROS_INFO("HERE 12.8");
-    //     // fflush(stdout);
-    //     return joint_trajectory;
-    // }
-
-    // ROS_INFO("HERE 12.7");
-    // fflush(stdout);
-
-    ROS_INFO_STREAM("Joinst States Name: " << joint_states.name[0]);
-    // fflush(stdout);
 
     // q_pose[0] = (joint_states.position)[2];
     // q_pose[1] = (joint_states.position)[3];
@@ -440,16 +408,17 @@ static trajectory_msgs::JointTrajectory trajectoryHelper()
 
 static void moveArmAndGripper(double pose, geometry_msgs::Point dest)
 {
+    moveArm(pose);
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(dest);
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
-    action_method(joint_trajectory);
+    action_method(joint_trajectory,pose*3);
 }
 
 static void moveArm(double pose)
 {
     geometry_msgs::Point homePoint;
-    homePoint.x = -0.4;
+    homePoint.x = 0.2;
     homePoint.y = 0;
     homePoint.z = 0.2;
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(homePoint);
@@ -467,10 +436,10 @@ static void moveArm(double pose)
     }
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
-    action_method(joint_trajectory);
+    action_method(joint_trajectory,pose*3);
 }
 
-static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
+static void action_method(trajectory_msgs::JointTrajectory joint_trajectory,double duration)
 {
 
     if (joint_trajectory.header.frame_id == "empty")
@@ -500,53 +469,34 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory)
                                        ros::Duration(30.0), ros::Duration(30.0));
     ROS_INFO("Action Server returned with status: [%i] %s", state.state_,
              state.toString().c_str());
-    ros::Duration(5.0).sleep();
+    ros::Duration(std::abs(duration) + 1).sleep();
 }
 
 static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
 {
 
     osrf_gear::VacuumGripperControl srv;
-    // geometry_msgs::Point copy = dest;
-
-    // bool succeeded = false;
-
-    // copy.z = dest.z;
-    //   if (!attach)
-    //      {
-    //          copy.z = dest.z + 0.3;
-    //      }
-    //  action_method(get_trajectory(copy));
-
     moveArmAndGripper(pose, dest);
-    ROS_INFO(attach ? "Picking Up" : "Dropping");
-    int i = 0;
-    // while (!(gripper_state.attached == attach))
-    // {
-    //     if(i>5){
-    //         break;
-    //     }
-    //     i++;
-    // ROS_ERROR_STREAM(gripper_state.attached);
-    // ROS_ERROR_STREAM(attach);
 
-    // ROS_INFO("Inside operate Gripper");
     ros::Duration s(3);
     s.sleep();
     srv.request.enable = attach;
     // succeeded =
     gripper_client.call(srv);
     s.sleep();
-
-    // copy.z = copy.z + 0.1;
-    // action_method(get_trajectory(copy));
-    // s.sleep();
-
-    // s.sleep();
-    // copy.z = dest.z + 0.1;
-    // action_method(get_trajectory(copy));
-    // }
-    ROS_WARN("Left loop gripper");
+    if (attach)
+    {
+        dest.x = dest.z + 0.1;
+        dest.z = dest.z + 0.2;
+        dest.y = 0;
+        action_method(get_trajectory(dest), 2);
+    }
+    else{
+        dest.x = 0.2;
+        dest.z = dest.z + -0.1;
+        dest.y = 0.1;
+        action_method(get_trajectory(dest), 2);
+    }
 }
 
 void gripperStateCallback(const osrf_gear::VacuumGripperStateConstPtr &msg)
@@ -613,9 +563,7 @@ int main(int argc, char *argv[])
         char stringCam[100];
         std::sprintf(stringCam, "/ariac/logical_camera_bin%d", i + 1);
         binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-                                                                   {
-                                                                       camera_Logical_Images.at(i) = *img;
-                                                                   });
+                                                                   { camera_Logical_Images.at(i) = *img; });
     }
 
     for (int i = binCameras.size(); i < agvCameras.size() + binCameras.size(); i++)
