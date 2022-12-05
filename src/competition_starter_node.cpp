@@ -54,6 +54,8 @@ ros::ServiceClient agv1_client;
 ros::ServiceClient agv2_client;
 static void moveArmAndGripper(double pose, geometry_msgs::Point dest);
 static const double THROTTLE = 30;
+void operateGripperHelper(bool attach);
+static bool skip = false;
 
 void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 {
@@ -70,8 +72,16 @@ void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 
 void orderCallback(const osrf_gear::Order msg)
 {
-    ROS_ERROR("Starsting Order callback");
-    // fflush(stdout);
+    ROS_ERROR("Starting Order callback");
+    // if(!skip){
+    //     skip = true;
+    //      //order_vector.push_back(msg);
+    // }
+    // else{
+    
+    // // fflush(stdout);
+    
+    // }
     order_vector.push_back(msg);
 }
 
@@ -111,7 +121,7 @@ static geometry_msgs::TransformStamped transformHelper(std::string frame)
 
 void printOrderModelPose()
 {
-    ROS_INFO("Handling Arm");
+    ROS_INFO_THROTTLE(THROTTLE,"Handling Arm");
     if (joint_states.header.frame_id == "uninitialized")
     {
         return;
@@ -126,29 +136,37 @@ void printOrderModelPose()
     
     for (osrf_gear::Shipment shipment : shipments)
     {
+        //shipment = shipments.at(1);
         double agv_lin;
         int agv_num;
         std::string agv_camera_frame;
         std::string agv_id = shipment.agv_id;
 
         double y_modify;
-        // double side;
+        double side;
+        double z_modify;
 
         if (agv_id == "agv1")
         {
-            agv_lin = 2;
+            agv_lin = 2.2;
             agv_num = 1;
             agv_camera_frame = "logical_camera_agv1_frame";
             // side = 0.2;
-            y_modify = -0.2;
+            // y_modify = -0.5;
+            // z_modify = 0.2;
+
+            side = 0;
+            y_modify = -0;
+            z_modify = 0.;
         }
         else
         {
             agv_lin = -2.25;
             agv_num = 2;
             agv_camera_frame = "logical_camera_agv2_frame";
-            // side = -0.2;
-            y_modify = 0.2;
+            side = -0;
+            y_modify = 0;
+            z_modify = 0.25;
         }
 
         for (osrf_gear::Product product : shipment.products)
@@ -229,10 +247,19 @@ void printOrderModelPose()
 
                     operateGripper(true, goal_pose_bin.pose.position, camY);
 
-
                     moveArm(centerY);
 
                     moveArm(agv_lin);
+
+                    if(agv_num == 1){
+                        geometry_msgs::Point tray;
+                        tray.x = -0.2;
+                        tray.y = 0.7;
+                        tray.z = 0.1;
+                        moveArmAndGripper(agv_lin, tray);
+                        operateGripperHelper(false);
+                    }
+                    else{
 
                     std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
                     geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
@@ -243,16 +270,17 @@ void printOrderModelPose()
                     goal_pose_agv.pose.orientation.y = 0.707;
                     goal_pose_agv.pose.orientation.z = 0.0;
 
-                    // goal_pose_agv.pose.position.x += side;
+                    goal_pose_agv.pose.position.x += side;
                     goal_pose_agv.pose.position.y += y_modify;
-                    goal_pose_agv.pose.position.z += 0.25;
+                    goal_pose_agv.pose.position.z += z_modify;
 
                     // geometry_msgs::Point goalPoint = goal_pose_bin.pose.position;
                     // geometry_msgs::Point trayPoint = goal_pose_agv.pose.position;
 
+                    
                     operateGripper(false, goal_pose_agv.pose.position, agv_lin);
                     // ROS_ERROR("Dropping Tray");
-
+                    }
                     // move home
                     moveArm(centerY);
                 }
@@ -262,12 +290,12 @@ void printOrderModelPose()
         osrf_gear::AGVControl submit;
         submit.request.shipment_type = shipment.shipment_type;
         sendOutAGV(submit, agv_num);
-        ros::Duration(7.5).sleep();
+        ros::Duration(5).sleep();
         ROS_WARN("Completed Shipment");
     }
     ROS_ERROR("Completed Order");
     ROS_ERROR_STREAM(order_vector.size());
-    //order_vector.erase(order_vector.begin());
+    order_vector.erase(order_vector.begin());
     ROS_ERROR_STREAM(order_vector.size());
 }
 
@@ -329,7 +357,7 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
 
     // trajectory_msgs::JointTrajectory joint_trajectory;
 
-    ROS_INFO("INVS SOLs: %d", num_sols);
+    ROS_INFO_THROTTLE(THROTTLE,"INVS SOLs: %d", num_sols);
 
     if (num_sols == 0)
     {
@@ -418,8 +446,8 @@ static void moveArmAndGripper(double pose, geometry_msgs::Point dest)
 static void moveArm(double pose)
 {
     geometry_msgs::Point homePoint;
-    homePoint.x = 0.2;
-    homePoint.y = 0;
+    homePoint.x = -0.2;
+    homePoint.y = 0.4;
     homePoint.z = 0.2;
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(homePoint);
     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
@@ -472,18 +500,20 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory,doub
     ros::Duration(std::abs(duration) + 1).sleep();
 }
 
-static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
-{
-
+void operateGripperHelper(bool attach){
+      ros::Duration s(3);
     osrf_gear::VacuumGripperControl srv;
-    moveArmAndGripper(pose, dest);
-
-    ros::Duration s(3);
     s.sleep();
     srv.request.enable = attach;
     // succeeded =
     gripper_client.call(srv);
     s.sleep();
+}
+
+static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
+{
+    moveArmAndGripper(pose, dest);
+    operateGripperHelper(attach);
     if (attach)
     {
         dest.x = dest.z + 0.1;
@@ -498,6 +528,7 @@ static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
         action_method(get_trajectory(dest), 2);
     }
 }
+
 
 void gripperStateCallback(const osrf_gear::VacuumGripperStateConstPtr &msg)
 {
