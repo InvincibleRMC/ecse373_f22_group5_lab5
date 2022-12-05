@@ -75,11 +75,9 @@ void orderCallback(const osrf_gear::Order msg)
     ROS_ERROR("Starting Order callback");
     // if(!skip){
     //     skip = true;
-    //      //order_vector.push_back(msg);
     // }
     // else{
-    
-    // // fflush(stdout);
+    // order_vector.push_back(msg);
     
     // }
     order_vector.push_back(msg);
@@ -88,9 +86,7 @@ void orderCallback(const osrf_gear::Order msg)
 void jointCallback(const sensor_msgs::JointState msg)
 {
     ROS_INFO_THROTTLE(THROTTLE, "Starting Joint callback");
-    // fflush(stdout);
-
-    joint_states = msg;
+   joint_states = msg;
     joint_states.header.frame_id = "not_empty";
 
     std::string str;
@@ -136,7 +132,7 @@ void printOrderModelPose()
     
     for (osrf_gear::Shipment shipment : shipments)
     {
-        //shipment = shipments.at(1);
+       // shipment = shipments.at(1);
         double agv_lin;
         int agv_num;
         std::string agv_camera_frame;
@@ -254,7 +250,7 @@ void printOrderModelPose()
                     if(agv_num == 1){
                         geometry_msgs::Point tray;
                         tray.x = -0.2;
-                        tray.y = 0.7;
+                        tray.y = 0.9;
                         tray.z = 0.1;
                         moveArmAndGripper(agv_lin, tray);
                         operateGripperHelper(false);
