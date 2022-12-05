@@ -55,11 +55,9 @@ ros::ServiceClient agv2_client;
 static void moveArmAndGripper(double pose, geometry_msgs::Point dest);
 static const double THROTTLE = 30;
 void operateGripperHelper(bool attach);
-static bool skip = false;
 
 void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 {
-
     if (agvnum == 1)
     {
         agv1_client.call(agv);
@@ -135,14 +133,14 @@ void printOrderModelPose()
 
         if (agv_id == "agv1")
         {
-            agv_lin = 2.2;
+            agv_lin = 2.2;  //Y value of the tray1
             agv_num = 1;
             agv_camera_frame = "logical_camera_agv1_frame";
             z_modify = 0.;
         }
         else
         {
-            agv_lin = -2.25;
+            agv_lin = -2.25; // Y value of the tray2
             agv_num = 2;
             agv_camera_frame = "logical_camera_agv2_frame";
             z_modify = 0.25;
@@ -159,6 +157,7 @@ void printOrderModelPose()
             gml.call(gmlService);
             for (osrf_gear::StorageUnit su : gmlService.response.storage_units)
             {
+                // Ignore Parts on the belt
                 if (su.unit_id == "belt")
                 {
                     continue;
@@ -168,23 +167,27 @@ void printOrderModelPose()
                 sscanf(binName, "bin%d", &binNum);
                 binNum--;
 
+                // Do nothing if the camera callbacks are uninitialized
                 if (camera_Logical_Images.at(binNum).models.size() == 0)
                 {
                     return;
                 }
+
+                // Choose the first model
                 osrf_gear::Model model = camera_Logical_Images.at(binNum).models.at(0);
 
+                // Check that the part in the list is the part we're looking for
                 if (productType == model.type)
                 {
-
                     geometry_msgs::PoseStamped part_pose, goal_pose_bin, goal_pose_agv;
                     part_pose.pose = model.pose;
                     geometry_msgs::Point point = model.pose.position;
                     ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
 
                     std::string frame = "logical_camera_" + su.unit_id + "_frame";
-                    const double centerY = 0.2;
+                    const double centerY = 0.2; // Center of the beam
                     double camY;
+                    // Set the y-value for the bin
                     if (su.unit_id == "bin4")
                     {
                         ROS_WARN_STREAM(su.unit_id);
@@ -204,22 +207,30 @@ void printOrderModelPose()
                     {
                         ROS_ERROR("WRONG BIN");
                     }
+
+                    // Move the arm to the bin
                     moveArm(camY);
 
+                    // Then do transform
                     geometry_msgs::TransformStamped binTransform = transformHelper(frame);
                     tf2::doTransform(part_pose, goal_pose_bin, binTransform);
 
+                    // Orient gripper to face down
                     goal_pose_bin.pose.orientation.w = 0.707;
                     goal_pose_bin.pose.orientation.x = 0.0;
                     goal_pose_bin.pose.orientation.y = 0.707;
                     goal_pose_bin.pose.orientation.z = 0.0;
-                   
+
+                    // Pick up the part
                     operateGripper(true, goal_pose_bin.pose.position, camY);
 
+                    // Go back to center
                     moveArm(centerY);
 
+                    // Move to tray
                     moveArm(agv_lin);
 
+                    // Add special case for tray 1
                     if (agv_num == 1)
                     {
                         geometry_msgs::Point tray;
@@ -229,7 +240,7 @@ void printOrderModelPose()
                         moveArmAndGripper(agv_lin, tray);
                         operateGripperHelper(false);
                     }
-                    else
+                    else // Orient the arm to drop on the tray
                     {
 
                         std::string tray_frame = "kit_tray_" + std::to_string(agv_num);
@@ -251,6 +262,7 @@ void printOrderModelPose()
                
             }
         }
+        // Submit the shipment once complete
         osrf_gear::AGVControl submit;
         submit.request.shipment_type = shipment.shipment_type;
         sendOutAGV(submit, agv_num);
@@ -293,15 +305,6 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
     T_des[3][1] = 0.0;
     T_des[3][2] = 0.0;
 
-    // q_pose[0] = (joint_states.position)[2];
-    // q_pose[1] = (joint_states.position)[3];
-    // q_pose[2] = (joint_states.position)[0];
-    // q_pose[3] = (joint_states.position)[4];
-    // q_pose[4] = (joint_states.position)[5];
-    // q_pose[5] = (joint_states.position)[6];
-
-    // ur_kinematics::forward((double *)&q_pose, (double *)&T_pose);
-
     // Fill out the joint trajectory header.
     // Each joint trajectory should have an non-monotonically increasing sequence number.
 
@@ -318,8 +321,6 @@ static trajectory_msgs::JointTrajectory get_trajectory(geometry_msgs::Point dest
     }
 
     int num_sols = ur_kinematics::inverse((double *)&T_des, (double *)&q_des);
-
-    // trajectory_msgs::JointTrajectory joint_trajectory;
 
     ROS_INFO_THROTTLE(THROTTLE, "INVS SOLs: %d", num_sols);
 
@@ -434,10 +435,10 @@ static void moveArm(double pose)
 static void action_method(trajectory_msgs::JointTrajectory joint_trajectory, double duration)
 {
 
+    // Make sure there are solutions
     if (joint_trajectory.header.frame_id == "empty")
     {
-        ROS_INFO("Breaked");
-        // fflush(stdout);
+        ROS_INFO("NO SOLUTIONS");
         return;
     }
     // Create the structure to populate for running the Action Server.
@@ -476,8 +477,11 @@ void operateGripperHelper(bool attach)
 
 static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
 {
+    // Move the arm to bin/tray
     moveArmAndGripper(pose, dest);
+    // Then grab or drop the part
     operateGripperHelper(attach);
+    // Move away from the part depending on if dropping or picking
     if (attach)
     {
         dest.x = dest.z + 0.1;
@@ -503,7 +507,6 @@ int main(int argc, char *argv[])
 {
 
     joint_states.header.frame_id = "uninitialized";
-    // trajectory_as();
     ros::init(argc, argv, "lab5");
 
     ros::NodeHandle n;
@@ -557,8 +560,11 @@ int main(int argc, char *argv[])
     {
         char stringCam[100];
         std::sprintf(stringCam, "/ariac/logical_camera_bin%d", i + 1);
-        binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-                                                                   { camera_Logical_Images.at(i) = *img; });
+        binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000,
+                       [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
+        {
+            camera_Logical_Images.at(i) = *img;
+        });
     }
 
     for (int i = binCameras.size(); i < agvCameras.size() + binCameras.size(); i++)
@@ -567,8 +573,11 @@ int main(int argc, char *argv[])
         int num = i - binCameras.size();
         std::sprintf(stringCam, "/ariac/logical_camera_agv%d", num + 1);
 
-        agvCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-                                                                     { camera_Logical_Images.at(i) = *img; });
+        agvCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000,
+                         [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
+        {
+            camera_Logical_Images.at(i) = *img;
+        });
     }
 
     for (int i = agvCameras.size() + binCameras.size(); i < agvCameras.size() + binCameras.size() + qualityCameras.size(); i++)
@@ -577,19 +586,20 @@ int main(int argc, char *argv[])
         int num = i - (agvCameras.size() + binCameras.size());
         std::sprintf(stringCam, "/ariac/quality_control_sensor_%d", num + 1);
 
-        qualityCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000, [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-                                                                         { camera_Logical_Images.at(i) = *img; });
+        qualityCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000,
+                             [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
+        {
+            camera_Logical_Images.at(i) = *img;
+        });
     }
 
     ros::Subscriber jointSub = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1000, jointCallback);
 
     ROS_INFO("Spinning");
-    // fflush(stdout);
     ros::Rate r(10);
     while (ros::ok)
     {
         printOrderModelPose();
-        // ros::spinOnce();
         r.sleep();
     }
 }
