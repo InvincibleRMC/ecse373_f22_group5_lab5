@@ -24,3 +24,6 @@
 
 Launch the program using the attached launch file:
 `roslaunch ecse373_f22_group5 lab5.launch`
+
+### Theory of Operation:
+![image](Theory_of_Operation.jpg "Theory of Operation")
