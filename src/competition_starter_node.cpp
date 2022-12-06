@@ -56,6 +56,8 @@ static void moveArmAndGripper(double pose, geometry_msgs::Point dest);
 static const double THROTTLE = 30;
 void operateGripperHelper(bool attach);
 
+
+
 void sendOutAGV(osrf_gear::AGVControl agv, int agvnum)
 {
     if (agvnum == 1)
@@ -72,6 +74,7 @@ void orderCallback(const osrf_gear::Order msg)
 {
     ROS_ERROR("Starting Order callback");
     order_vector.push_back(msg);
+
 }
 
 void jointCallback(const sensor_msgs::JointState msg)
@@ -128,15 +131,15 @@ void printOrderModelPose()
         int agv_num;
         std::string agv_camera_frame;
         std::string agv_id = shipment.agv_id;
-       
+
         double z_modify;
 
         if (agv_id == "agv1")
         {
-            agv_lin = 2.2;  //Y value of the tray1
+            agv_lin = 2.2; // Y value of the tray1
             agv_num = 1;
             agv_camera_frame = "logical_camera_agv1_frame";
-            z_modify = 0.;
+            z_modify = 0.25;
         }
         else
         {
@@ -185,7 +188,7 @@ void printOrderModelPose()
                     ROS_WARN("name:= %s x:=%f y:=%f z:=%f", model.type.c_str(), point.x, point.y, point.z);
 
                     std::string frame = "logical_camera_" + su.unit_id + "_frame";
-                    const double centerY = 0.2; // Center of the beam
+                    const double centerY = 0; // Center of the beam
                     double camY;
                     // Set the y-value for the bin
                     if (su.unit_id == "bin4")
@@ -215,17 +218,8 @@ void printOrderModelPose()
                     geometry_msgs::TransformStamped binTransform = transformHelper(frame);
                     tf2::doTransform(part_pose, goal_pose_bin, binTransform);
 
-                    // Orient gripper to face down
-                    goal_pose_bin.pose.orientation.w = 0.707;
-                    goal_pose_bin.pose.orientation.x = 0.0;
-                    goal_pose_bin.pose.orientation.y = 0.707;
-                    goal_pose_bin.pose.orientation.z = 0.0;
-
                     // Pick up the part
                     operateGripper(true, goal_pose_bin.pose.position, camY);
-
-                    // Go back to center
-                    moveArm(centerY);
 
                     // Move to tray
                     moveArm(agv_lin);
@@ -234,9 +228,9 @@ void printOrderModelPose()
                     if (agv_num == 1)
                     {
                         geometry_msgs::Point tray;
-                        tray.x = -0.2;
-                        tray.y = 0.9;
-                        tray.z = 0.1;
+                        tray.x = 0.2;
+                        tray.y = 0.7;
+                        tray.z = 0.2;
                         moveArmAndGripper(agv_lin, tray);
                         operateGripperHelper(false);
                     }
@@ -247,26 +241,17 @@ void printOrderModelPose()
                         geometry_msgs::TransformStamped tray_tf = transformHelper(tray_frame);
                         tf2::doTransform(productDest, goal_pose_agv, tray_tf);
 
-                        goal_pose_agv.pose.orientation.w = 0.707;
-                        goal_pose_agv.pose.orientation.x = 0.0;
-                        goal_pose_agv.pose.orientation.y = 0.707;
-                        goal_pose_agv.pose.orientation.z = 0.0;
-                        
                         goal_pose_agv.pose.position.z += z_modify;
 
                         operateGripper(false, goal_pose_agv.pose.position, agv_lin);
                     }
-                    // move home
-                    moveArm(centerY);
                 }
-               
             }
         }
         // Submit the shipment once complete
         osrf_gear::AGVControl submit;
         submit.request.shipment_type = shipment.shipment_type;
         sendOutAGV(submit, agv_num);
-        ros::Duration(5).sleep();
         ROS_WARN("Completed Shipment");
     }
     ROS_ERROR("Completed Order");
@@ -405,15 +390,15 @@ static void moveArmAndGripper(double pose, geometry_msgs::Point dest)
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(dest);
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
-    action_method(joint_trajectory, pose * 3);
+    action_method(joint_trajectory, pose * 2);
 }
 
 static void moveArm(double pose)
 {
     geometry_msgs::Point homePoint;
-    homePoint.x = -0.2;
-    homePoint.y = 0.4;
-    homePoint.z = 0.2;
+    homePoint.x = -0.4;
+    homePoint.y = 0.2;
+    homePoint.z = 0.1;
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(homePoint);
     for (int indy = 0; indy < joint_trajectory.joint_names.size(); indy++)
     {
@@ -429,7 +414,7 @@ static void moveArm(double pose)
     }
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
-    action_method(joint_trajectory, pose * 3);
+    action_method(joint_trajectory, pose * 2);
 }
 
 static void action_method(trajectory_msgs::JointTrajectory joint_trajectory, double duration)
@@ -462,7 +447,7 @@ static void action_method(trajectory_msgs::JointTrajectory joint_trajectory, dou
                                        ros::Duration(30.0), ros::Duration(30.0));
     ROS_INFO("Action Server returned with status: [%i] %s", state.state_,
              state.toString().c_str());
-    ros::Duration(std::abs(duration) + 1).sleep();
+    ros::Duration(std::abs(duration) + 2).sleep();
 }
 
 void operateGripperHelper(bool attach)
@@ -481,21 +466,13 @@ static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
     moveArmAndGripper(pose, dest);
     // Then grab or drop the part
     operateGripperHelper(attach);
-    // Move away from the part depending on if dropping or picking
-    if (attach)
-    {
-        dest.x = dest.z + 0.1;
-        dest.z = dest.z + 0.2;
-        dest.y = 0;
-        action_method(get_trajectory(dest), 2);
-    }
-    else
-    {
-        dest.x = 0.2;
-        dest.z = dest.z + -0.1;
-        dest.y = 0.1;
-        action_method(get_trajectory(dest), 2);
-    }
+    
+    dest.x = dest.x / 3 - 0.1;
+    dest.y = dest.y / 3;
+    dest.z = dest.z / 3 + 0.1;
+    // Move home
+    action_method(get_trajectory(dest), 3);
+    
 }
 
 void gripperStateCallback(const osrf_gear::VacuumGripperStateConstPtr &msg)
@@ -561,10 +538,10 @@ int main(int argc, char *argv[])
         char stringCam[100];
         std::sprintf(stringCam, "/ariac/logical_camera_bin%d", i + 1);
         binCameras[i] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000,
-                       [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-        {
-            camera_Logical_Images.at(i) = *img;
-        });
+                                                                   [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
+                                                                   {
+                                                                       camera_Logical_Images.at(i) = *img;
+                                                                   });
     }
 
     for (int i = binCameras.size(); i < agvCameras.size() + binCameras.size(); i++)
@@ -574,10 +551,10 @@ int main(int argc, char *argv[])
         std::sprintf(stringCam, "/ariac/logical_camera_agv%d", num + 1);
 
         agvCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000,
-                         [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-        {
-            camera_Logical_Images.at(i) = *img;
-        });
+                                                                     [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
+                                                                     {
+                                                                         camera_Logical_Images.at(i) = *img;
+                                                                     });
     }
 
     for (int i = agvCameras.size() + binCameras.size(); i < agvCameras.size() + binCameras.size() + qualityCameras.size(); i++)
@@ -587,10 +564,10 @@ int main(int argc, char *argv[])
         std::sprintf(stringCam, "/ariac/quality_control_sensor_%d", num + 1);
 
         qualityCameras[num] = n.subscribe<osrf_gear::LogicalCameraImage>(stringCam, 1000,
-                             [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
-        {
-            camera_Logical_Images.at(i) = *img;
-        });
+                                                                         [i](const boost::shared_ptr<const osrf_gear::LogicalCameraImage_<std::allocator<void>>> img)
+                                                                         {
+                                                                             camera_Logical_Images.at(i) = *img;
+                                                                         });
     }
 
     ros::Subscriber jointSub = n.subscribe<sensor_msgs::JointState>("/ariac/arm1/joint_states", 1000, jointCallback);
