@@ -52,7 +52,7 @@ static void moveArm(double pose);
 static void operateGripper(bool attach, geometry_msgs::Point dest, double pose);
 ros::ServiceClient agv1_client;
 ros::ServiceClient agv2_client;
-static void moveArmAndGripper(double pose, geometry_msgs::Point dest);
+static void moveArmAndGripper(double pose, geometry_msgs::Point dest, double duration);
 static const double THROTTLE = 30;
 void operateGripperHelper(bool attach);
 
@@ -231,7 +231,7 @@ void printOrderModelPose()
                         tray.x = 0.2;
                         tray.y = 0.7;
                         tray.z = 0.2;
-                        moveArmAndGripper(agv_lin, tray);
+                        moveArmAndGripper(agv_lin, tray,agv_lin);
                         operateGripperHelper(false);
                     }
                     else // Orient the arm to drop on the tray
@@ -384,13 +384,13 @@ static trajectory_msgs::JointTrajectory trajectoryHelper()
     return joint_trajectory;
 }
 
-static void moveArmAndGripper(double pose, geometry_msgs::Point dest)
+static void moveArmAndGripper(double pose, geometry_msgs::Point dest,double duration)
 {
     moveArm(pose);
     trajectory_msgs::JointTrajectory joint_trajectory = get_trajectory(dest);
     joint_trajectory.points[1].positions[0] = pose;
     joint_trajectory.points[1].time_from_start = ros::Duration(5.0);
-    action_method(joint_trajectory, pose * 2);
+    action_method(joint_trajectory, duration);
 }
 
 static void moveArm(double pose)
@@ -463,13 +463,16 @@ void operateGripperHelper(bool attach)
 static void operateGripper(bool attach, geometry_msgs::Point dest, double pose)
 {
     // Move the arm to bin/tray
-    moveArmAndGripper(pose, dest);
+    moveArmAndGripper(pose, dest,pose*3);
     // Then grab or drop the part
     operateGripperHelper(attach);
     
     dest.x = dest.x / 3 - 0.1;
     dest.y = dest.y / 3;
     dest.z = dest.z / 3 + 0.1;
+    
+    // Move clear of Camera
+    moveArmAndGripper(pose, dest,3);
     // Move home
     action_method(get_trajectory(dest), 3);
     
